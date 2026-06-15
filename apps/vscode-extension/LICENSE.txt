@@ -1,22 +1,52 @@
-MIT License
+RuntimeAds Extension License
+Copyright (c) 2026 Cognitobit Innovations Private Limited. All rights reserved.
 
-Copyright (c) 2026 RuntimeAds
+This software — the RuntimeAds extension for Visual Studio Code, Cursor, and
+compatible editors, together with the libraries bundled with it (the "Software")
+— is made source-available for transparency so you can see exactly what runs on
+your machine. It is NOT open-source software. By installing, running, copying,
+or accessing the Software or its source code, you agree to these terms.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. License grant. Subject to your compliance with these terms, RuntimeAds grants
+   you a personal, non-exclusive, non-transferable, revocable license to:
+   (a) view the published source code of the Software to understand and audit
+       its behavior; and
+   (b) install and run the official, unmodified Software obtained from an
+       official distribution channel (such as the Visual Studio Marketplace or
+       Open VSX Registry) for your own use.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Restrictions. You may not, and may not permit any third party to:
+   (a) copy, publish, distribute, sublicense, sell, rent, host, or otherwise
+       make the Software, or any portion of it, available to others;
+   (b) modify, adapt, translate, or create derivative works of the Software;
+   (c) use the Software, or any of its code, designs, interfaces, or concepts,
+       to build or operate any product or service that competes with RuntimeAds,
+       including any advertising, attention-measurement, or developer-earnings
+       network;
+   (d) remove, disable, bypass, or tamper with any billing, attribution,
+       fraud-prevention, integrity, or security mechanism in the Software, or
+       falsify, inflate, or replay the signals or events it reports;
+   (e) reverse engineer the Software, except to the limited extent this
+       restriction cannot be excluded under applicable law.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Commercial and other use. Any use beyond Section 1 — including
+   redistribution, modification, or commercial exploitation — requires a
+   separate, written license from RuntimeAds. Contact: ashes4799@gmail.com
 
+4. Ownership. The Software is licensed, not sold. RuntimeAds retains all right,
+   title, and interest in and to the Software and all related intellectual
+   property. No rights are granted except those expressly stated here.
+
+5. Termination. This license terminates automatically if you breach it, and
+   RuntimeAds may revoke it at any time. On termination you must stop using the
+   Software and delete all copies in your possession or control.
+
+6. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of liability. TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT
+   SHALL RUNTIMEADS OR ITS CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE OR OTHER
+   DEALINGS IN THE SOFTWARE.

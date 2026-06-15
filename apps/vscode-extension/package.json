@@ -5,6 +5,7 @@
   "publisher": "runtimeads",
   "private": true,
   "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "icon": "media/favicon.png",
   "main": "./dist/extension.cjs",
   "categories": [
