@@ -1,0 +1,133 @@
+{
+  "name": "runtimeads",
+  "displayName": "RuntimeAds",
+  "description": "Get paid while Claude Code and Codex think. Privacy-safe sponsor ads during AI wait time.",
+  "publisher": "runtimeads",
+  "private": true,
+  "version": "0.1.0",
+  "icon": "media/favicon.png",
+  "main": "./dist/extension.cjs",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "developer tools",
+    "sponsorship"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ashes47/RuntimeAds"
+  },
+  "scripts": {
+    "build": "tsup && tsup --config tsup.dashboard.config.ts && node ./scripts/copy-sql-wasm.mjs && node ./scripts/copy-claude-hook.mjs",
+    "vscode:uninstall": "node ./dist/uninstall.cjs",
+    "package": "pnpm build && node ./scripts/verify-vsix-artifacts.mjs && vsce package --no-dependencies",
+    "install:cursor": "node ./scripts/install-vsix.mjs cursor",
+    "install:code": "node ./scripts/install-vsix.mjs code",
+    "reinstall:cursor": "node ./scripts/install-vsix.mjs cursor --uninstall-first",
+    "reinstall:code": "node ./scripts/install-vsix.mjs code --uninstall-first",
+    "pretest": "pnpm --filter @runtimeads/sdk-contracts build && pnpm --filter @runtimeads/runtime build && pnpm build && node ./scripts/test-sql-persistence.mjs && tsc -p tsconfig.test.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node ./out/test/runTest.js"
+  },
+  "dependencies": {
+    "@runtimeads/runtime": "workspace:*",
+    "@runtimeads/sdk-contracts": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/node": "^22.13.0",
+    "@types/sql.js": "^1.4.11",
+    "@types/vscode": "^1.100.0",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/vsce": "^3.9.2",
+    "mocha": "^11.7.6",
+    "ovsx": "^0.10.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "RuntimeAds",
+      "properties": {
+        "runtimeads.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.runtimeads.com",
+          "description": "RuntimeAds API URL. Leave the default unless you wanna not make money."
+        },
+        "runtimeads.render.statusBarAds": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show sponsor ads in the VS Code status bar while Claude or Codex is waiting."
+        },
+        "runtimeads.render.spinnerHoldMs": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "How long sponsor text stays visible in the Claude or Codex terminal spinner (milliseconds)."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "runtimeads.login",
+        "title": "RuntimeAds: Sign In"
+      },
+      {
+        "command": "runtimeads.logout",
+        "title": "RuntimeAds: Sign Out"
+      },
+      {
+        "command": "runtimeads.openDashboard",
+        "title": "RuntimeAds: Open Dashboard"
+      },
+      {
+        "command": "runtimeads.openActiveAd",
+        "title": "RuntimeAds: Open Active Ad"
+      },
+      {
+        "command": "runtimeads.openMenu",
+        "title": "RuntimeAds: Menu"
+      },
+      {
+        "command": "runtimeads.showDiagnostics",
+        "title": "RuntimeAds: Help & Status"
+      },
+      {
+        "command": "runtimeads.installTerminalHooks",
+        "title": "RuntimeAds: Set Up Claude & Codex"
+      },
+      {
+        "command": "runtimeads.dismissAd",
+        "title": "RuntimeAds: Dismiss Sponsor Ad"
+      },
+      {
+        "command": "runtimeads.restoreAds",
+        "title": "RuntimeAds: Restore Sponsor Ads"
+      },
+      {
+        "command": "runtimeads.restoreWebviewPatches",
+        "title": "RuntimeAds: Restore Claude & Codex Panels"
+      },
+      {
+        "command": "runtimeads.removeIntegrations",
+        "title": "RuntimeAds: Remove Claude & Codex Integration"
+      }
+    ]
+  }
+}

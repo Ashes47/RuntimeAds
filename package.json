@@ -1,0 +1,8 @@
+{
+  "name": "runtimeads-extension-mirror",
+  "private": true,
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "build:vsix": "pnpm --filter @runtimeads/sdk-contracts build && pnpm --filter @runtimeads/runtime build && pnpm --filter runtimeads package"
+  }
+}

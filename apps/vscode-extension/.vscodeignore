@@ -1,0 +1,11 @@
+src/**
+out/**
+.vscode-test/**
+*.tsbuildinfo
+tsconfig.json
+tsconfig.test.json
+tsup.config.ts
+tsup.dashboard.config.ts
+scripts/**
+node_modules/**
+!node_modules/@runtimeads/**

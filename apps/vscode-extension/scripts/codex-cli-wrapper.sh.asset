@@ -1,0 +1,10 @@
+#!/bin/sh
+# ===== RUNTIMEADS-CODEX-CLI =====
+# Reversible RuntimeAds wrapper around the npm-installed codex shim.
+AD_FILE="__RUNTIMEADS_CODEX_AD_PATH__"
+AD_TEXT="RuntimeAds sponsor"
+if [ -r "$AD_FILE" ]; then
+  AD_TEXT=$(head -n 1 "$AD_FILE" 2>/dev/null || echo "RuntimeAds sponsor")
+fi
+printf '\n  [ad] %s\n\n' "$AD_TEXT"
+exec node "__RUNTIMEADS_CODEX_BACKUP__" "$@"

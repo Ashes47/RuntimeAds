@@ -1,0 +1,12 @@
+@echo off
+REM ===== RUNTIMEADS-CODEX-CLI =====
+set "AD_FILE=__RUNTIMEADS_CODEX_AD_PATH__"
+set "AD_TEXT=RuntimeAds sponsor"
+if exist "%AD_FILE%" (
+  for /f "usebackq delims=" %%A in ("%AD_FILE%") do set "AD_TEXT=%%A" & goto :done
+)
+:done
+echo.
+echo   [ad] %AD_TEXT%
+echo.
+node "__RUNTIMEADS_CODEX_BACKUP__" %*

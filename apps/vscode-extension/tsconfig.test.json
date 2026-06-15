@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out",
+    "rootDir": "src",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@runtimeads/runtime": ["../../packages/runtime/dist/index.d.ts"],
+      "@runtimeads/sdk-contracts": ["../../packages/sdk-contracts/dist/index.d.ts"]
+    },
+    "types": ["node", "vscode", "mocha"]
+  },
+  "include": ["src/test/**/*.ts"]
+}
