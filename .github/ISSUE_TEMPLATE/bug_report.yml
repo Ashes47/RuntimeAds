@@ -1,0 +1,75 @@
+name: Bug report
+description: Something in the RuntimeAds extension isn't working as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve RuntimeAds. Please **do not include private data** (source code,
+        prompts, secrets) in this report — RuntimeAds never collects it, and we don't want it here either.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected to happen instead.
+      placeholder: When the agent finishes thinking, the ad...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: editor
+    attributes:
+      label: Editor
+      options:
+        - VS Code
+        - Cursor
+        - VSCodium
+        - Windsurf
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: AI agent
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: Shown next to "RuntimeAds" in the Extensions tab (e.g. 0.1.0).
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15 / Windows 11 / Ubuntu 24.04
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: >
+        From the command palette, run "RuntimeAds: Show Runtime Status" or check the Output panel.
+        Please scrub anything sensitive before pasting.
+      render: shell
+    validations:
+      required: false

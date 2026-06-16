@@ -49,9 +49,8 @@ Then run **“RuntimeAds: Sign In”** and accept the one-time setup that connec
 
 ## About this repository
 
-This is a **public, read-only mirror** of the RuntimeAds client — the exact code that runs on your
-machine, published so anyone can audit it. The backend (API, advertiser portal, auction & accounting
-engine) is **not** here.
+This repository holds the **RuntimeAds client** — the exact code that runs on your machine, published
+so anyone can audit it. The backend (API, advertiser portal, auction & accounting engine) is **not** here.
 
 - [`apps/vscode-extension/`](apps/vscode-extension) — the extension
 - [`packages/runtime/`](packages/runtime), [`packages/sdk-contracts/`](packages/sdk-contracts) — libraries bundled into the published build
@@ -63,7 +62,7 @@ pnpm install
 pnpm build:vsix   # → apps/vscode-extension/runtimeads-<version>.vsix
 ```
 
-> Synced automatically from the private source repo — please don't open PRs or issues here.
+**Bug reports and feature requests are very welcome** — use the [issue templates](https://github.com/Ashes47/RuntimeAds/issues/new/choose).
 
 ## License
 
