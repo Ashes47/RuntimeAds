@@ -31,7 +31,7 @@ or accessing the Software or its source code, you agree to these terms.
 
 3. Commercial and other use. Any use beyond Section 1 — including
    redistribution, modification, or commercial exploitation — requires a
-   separate, written license from RuntimeAds. Contact: ashes4799@gmail.com
+   separate, written license from RuntimeAds. Contact: support@runtimeads.com
 
 4. Ownership. The Software is licensed, not sold. RuntimeAds retains all right,
    title, and interest in and to the Software and all related intellectual

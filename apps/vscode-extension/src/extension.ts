@@ -68,8 +68,6 @@ async function promptSignInAgain(): Promise<void> {
 
 export async function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration("runtimeads");
-  // Production default — the published extension must reach the live API out of the box. For local
-  // development set `runtimeads.apiBaseUrl` to http://localhost:8000 in your editor settings.
   const apiBaseUrl = config.get<string>("apiBaseUrl", "https://api.runtimeads.com");
 
   const localStore = await createLocalStore(context);
