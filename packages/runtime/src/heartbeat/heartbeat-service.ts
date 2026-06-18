@@ -89,7 +89,9 @@ export class HeartbeatService implements RuntimeService {
   }
 
   async start(): Promise<void> {
-    await this.send();
+    // Only schedule the recurring beat. The INITIAL beat is sent by the runtime after install
+    // registration (attention-runtime.start) — sending one here too would double-fire at startup
+    // and the pre-registration beat would 403 for a fresh install.
     this.intervalHandle = this.scheduler.setInterval(() => {
       void this.send();
     }, this.intervalMs);

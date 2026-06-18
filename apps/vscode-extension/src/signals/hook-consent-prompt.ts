@@ -65,3 +65,58 @@ export async function promptForHookConsent(
     await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, true);
   }
 }
+
+/**
+ * Recurring (hourly) reminder for devs who installed the extension but never set up the terminal
+ * hooks — without them their AI-wait time isn't detected, so they earn nothing and the server
+ * soft-flags "hook integrity not verifiable" each heartbeat. Non-modal (a gentle toast, not the
+ * one-time modal above) and reuses the same consent keys, so "Don't ask again" — from here OR the
+ * initial modal — suppresses it permanently. No-ops once hooks are installed/consented.
+ */
+export async function nagHookSetupIfNeeded(
+  context: ExtensionContext,
+  runtime: AttentionRuntime,
+  endpoint: ClaudeHookServerHandle,
+  claudeWebviewService?: ClaudeCodeWebviewService,
+  codexWebviewService?: CodexWebviewService,
+  claudeCliSyncService?: ClaudeCliSyncService,
+): Promise<void> {
+  if (context.globalState.get<boolean>(HOOKS_NEVER_PROMPT_KEY)) {
+    return;
+  }
+  if (context.globalState.get<boolean>(HOOKS_CONSENT_GRANTED_KEY)) {
+    return;
+  }
+  if (await areTerminalHooksInstalled()) {
+    await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
+    return;
+  }
+
+  const choice = await window.showInformationMessage(
+    "RuntimeAds isn't earning yet — set up Claude Code & Codex to show a sponsor ad while your AI thinks. It adds one hook (globally) and never reads your prompts, code, or terminal output.",
+    "Set up Claude & Codex",
+    "Don't ask again",
+  );
+
+  if (choice === "Set up Claude & Codex") {
+    try {
+      await installTerminalHooks(
+        context,
+        runtime,
+        endpoint,
+        claudeWebviewService,
+        codexWebviewService,
+        claudeCliSyncService,
+      );
+      await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown hook install error";
+      void window.showErrorMessage(`Could not set up Claude & Codex: ${message}`);
+    }
+    return;
+  }
+
+  if (choice === "Don't ask again") {
+    await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, true);
+  }
+}

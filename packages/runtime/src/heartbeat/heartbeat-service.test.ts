@@ -92,4 +92,31 @@ describe("HeartbeatService", () => {
     expect(handles).toHaveLength(1);
     expect(cleared).toEqual(handles);
   });
+
+  it("does not send an immediate beat on start (the runtime sends the post-registration one)", async () => {
+    const store = new MemoryKeyValueStore();
+    const requests: HeartbeatRequest[] = [];
+    const service = new HeartbeatService({
+      installManager: new InstallManager({
+        platform: "vscode",
+        sdkVersion: "0.1.0",
+        store,
+        idFactory: () => "install-1",
+      }),
+      eventQueue: new EventQueue(store),
+      cacheStore: new CacheStore(store),
+      platform: "vscode",
+      sdkVersion: "0.1.0",
+      client: {
+        async heartbeat(request) {
+          requests.push(request);
+        },
+      },
+      // No-op scheduler so the interval never fires during the test.
+      scheduler: { setInterval: () => "handle", clearInterval: () => undefined },
+    });
+
+    await service.start();
+    expect(requests).toHaveLength(0); // start() only schedules; no beat yet
+  });
 });

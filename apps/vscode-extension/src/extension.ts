@@ -23,7 +23,7 @@ import {
 } from "./signals/claude-hook-display";
 import { ClaudeCliSyncService } from "./signals/claude-cli-sync";
 import { CodexCliSyncService } from "./signals/codex-cli-sync";
-import { promptForHookConsent } from "./signals/hook-consent-prompt";
+import { nagHookSetupIfNeeded, promptForHookConsent } from "./signals/hook-consent-prompt";
 import { refreshTerminalHooksIfNeeded } from "./signals/terminal-hook-installer";
 import { registerTerminalAdLinkProvider } from "./signals/terminal-ad-link-provider";
 import { getCachedHookIntegrity, refreshHookIntegrityState } from "./signals/hook-integrity";
@@ -246,6 +246,27 @@ export async function activate(context: ExtensionContext) {
       claudeCliSyncService,
     );
   })();
+
+  // The modal above fires once at startup; this hourly toast re-nags long-open sessions whose
+  // hooks still aren't set up (so they actually earn). Self-suppresses once set up / dismissed.
+  const hookNagTimer = setInterval(
+    () => {
+      void nagHookSetupIfNeeded(
+        context,
+        runtime!,
+        claudeHookServer!,
+        claudeWebviewService,
+        codexWebviewService,
+        claudeCliSyncService,
+      );
+    },
+    60 * 60 * 1000,
+  );
+  context.subscriptions.push({
+    dispose: () => {
+      clearInterval(hookNagTimer);
+    },
+  });
 }
 
 async function reportPatchPreflight(
