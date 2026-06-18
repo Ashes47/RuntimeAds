@@ -29,6 +29,11 @@ import { AgentDetectionService } from "../signals/agent-detection-service";
 import type { AgentDetector } from "../signals/agent-detector";
 import { ClaudeAdapter } from "../signals/claude-adapter";
 import { TelemetryService } from "../telemetry/telemetry-service";
+import {
+  VersionCheckService,
+  type ExtensionRequirementsClient,
+  type UpdateAvailableInfo,
+} from "../version/version-check-service";
 import { RuntimeContainer } from "./container";
 import type { RuntimeService } from "./service";
 
@@ -48,6 +53,12 @@ export interface RuntimeOptions {
   publisher?: string;
   /** Called when the server rejects registration as outdated (HTTP 426). */
   onVersionRejected?: () => void;
+  /**
+   * Called when the 1-min version-check poll finds a newer build than the running one.
+   * Proactive complement to onVersionRejected (which only fires once the build is too old
+   * to register). At most one call per discovered version.
+   */
+  onUpdateAvailable?: (info: UpdateAvailableInfo) => void;
   /** Called when the refresh token is rejected and the user must sign in again. */
   onSessionExpired?: () => void;
   registrationClient?: InstallRegistrationClient;
@@ -71,6 +82,8 @@ export interface AttentionRuntime {
   stop(): Promise<void>;
   ensureInstallRegistered(force?: boolean): Promise<void>;
   refillInventoryIfNeeded(): Promise<void>;
+  /** True once the build is known outdated (HTTP 426 or below min_supported); ads are paused. */
+  isAdServingPaused(): boolean;
   getStatus(): RuntimeStatus;
   getAuthSessionManager(): AuthSessionManager;
   getCredentialVault(): CredentialVault;
@@ -94,6 +107,7 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
   private readonly diagnosticsService: DiagnosticsService;
   private readonly eventQueue: EventQueue;
   private readonly heartbeatService: HeartbeatService;
+  private readonly versionCheckService: VersionCheckService;
   private readonly installManager: InstallManager;
   private readonly localDatabase: LocalDatabase;
   private readonly syncEngine: SyncEngine;
@@ -351,6 +365,22 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
       },
     });
     this.registerService(this.heartbeatService);
+    // Poll the public gate config once a minute; nudge the host when a newer build ships.
+    const versionCheckClient = getApiClient() as ExtensionRequirementsClient | undefined;
+    this.versionCheckService = new VersionCheckService({
+      currentVersion: options.extensionVersion ?? sdkVersion,
+      store: localStore,
+      ...(versionCheckClient ? { client: versionCheckClient } : {}),
+      onUpdateAvailable: (info) => {
+        // The poll found the build below min_supported (server would 426 it): pause ad serving
+        // now rather than waiting for the next register attempt to discover it.
+        if (info.required) {
+          this.markVersionRejected();
+        }
+        options.onUpdateAvailable?.(info);
+      },
+    });
+    this.registerService(this.versionCheckService);
     this.agentDetectionService = new AgentDetectionService({
       eventQueue: this.eventQueue,
       installManager: this.installManager,
@@ -363,6 +393,12 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
         this.displayMetricsService.recordImpressionSkip(reason);
       },
       onActivity: async (activity, sessionId, context) => {
+        // Outdated build: stop rendering ads entirely (refill is already gated, but skip the
+        // display so cached inventory doesn't surface either).
+        if (this.versionRejected) {
+          return;
+        }
+
         if (activity === "waiting_started") {
           await this.refillInventoryIfNeeded();
           if (sessionId) {
@@ -421,6 +457,11 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
       return;
     }
 
+    if (this.versionRejected) {
+      // Outdated build: don't fetch ads the server would reject anyway, and that we won't show.
+      return;
+    }
+
     try {
       const response = await this.inventoryRefillService.refillIfNeeded();
       if (response) {
@@ -460,7 +501,7 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
     } catch (error) {
       this.recordRuntimeError(error, "install.register");
       // P1-25: an outdated/unofficial build is rejected with HTTP 426. Surface an
-      // update prompt to the host and stop here — registration (and ad sync) stays
+      // update prompt to the host and stop here — registration and ad serving stay
       // blocked until the user updates, rather than crashing the runtime.
       if (
         typeof error === "object" &&
@@ -468,14 +509,30 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
         "status" in error &&
         (error as { status?: number }).status === 426
       ) {
-        if (!this.versionRejected) {
-          this.versionRejected = true;
-          this.onVersionRejected?.();
-        }
+        this.markVersionRejected();
         return;
       }
       throw error;
     }
+  }
+
+  /**
+   * Mark this build as version-rejected and pause ad serving client-side. Idempotent. Fires
+   * the host update prompt once. Called both reactively (HTTP 426 on register) and proactively
+   * (the version-check poll finding the build below min_supported). Don't wait for the server
+   * to reject every request — stop rendering/fetching ads here too.
+   */
+  private markVersionRejected(): void {
+    if (this.versionRejected) {
+      return;
+    }
+    this.versionRejected = true;
+    this.onVersionRejected?.();
+  }
+
+  /** True once the build is known outdated; ad fetch + render are paused. */
+  isAdServingPaused(): boolean {
+    return this.versionRejected;
   }
 
   async stop(): Promise<void> {

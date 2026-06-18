@@ -40,17 +40,31 @@ let codexWebviewService: CodexWebviewService | undefined;
 let claudeCliSyncService: ClaudeCliSyncService | undefined;
 let codexCliSyncService: CodexCliSyncService | undefined;
 
-// P1-25: the server rejected this build as outdated (HTTP 426). Ads/sync stay paused;
-// prompt the user to update via the Marketplace.
-async function promptExtensionUpdate(extensionId: string): Promise<void> {
-  const choice = await window.showWarningMessage(
-    "RuntimeAds is out of date and has paused until you update. Update to the latest version to resume earning.",
-    "Update",
-  );
-  if (choice === "Update") {
-    await env.openExternal(
-      Uri.parse(`https://marketplace.visualstudio.com/items?itemName=${extensionId}`),
-    );
+// P1-25: prompt the user to update via the Marketplace. Shared by two triggers — the
+// reactive HTTP 426 rejection (build too old to register; ads/sync paused) and the
+// proactive 1-min version-check poll (a newer build shipped). `message` carries the
+// trigger-appropriate wording; the Update button is identical.
+const PAUSED_UPDATE_MESSAGE =
+  "RuntimeAds is out of date and has paused until you update. Update to the latest version to resume earning.";
+
+// The 426 rejection and the version-check poll can both fire for an outdated build around
+// startup; suppress a second popup while one is already on screen.
+let updatePromptActive = false;
+
+async function promptExtensionUpdate(extensionId: string, message?: string): Promise<void> {
+  if (updatePromptActive) {
+    return;
+  }
+  updatePromptActive = true;
+  try {
+    const choice = await window.showWarningMessage(message ?? PAUSED_UPDATE_MESSAGE, "Update");
+    if (choice === "Update") {
+      await env.openExternal(
+        Uri.parse(`https://marketplace.visualstudio.com/items?itemName=${extensionId}`),
+      );
+    }
+  } finally {
+    updatePromptActive = false;
   }
 }
 
@@ -66,6 +80,21 @@ async function promptSignInAgain(): Promise<void> {
   }
 }
 
+// P1-22 / Antigravity: Cursor and Antigravity are VS Code forks that rebrand both appName and
+// uriScheme. Map the host to our platform tag so analytics/fraud attribute installs to the real
+// editor; default to plain "vscode".
+function resolveHostPlatform(): "vscode" | "cursor" | "antigravity" {
+  const appName = env.appName?.toLowerCase() ?? "";
+  const uriScheme = env.uriScheme?.toLowerCase() ?? "";
+  if (appName.includes("antigravity") || uriScheme === "antigravity") {
+    return "antigravity";
+  }
+  if (appName.includes("cursor") || uriScheme === "cursor") {
+    return "cursor";
+  }
+  return "vscode";
+}
+
 export async function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration("runtimeads");
   const apiBaseUrl = config.get<string>("apiBaseUrl", "https://api.runtimeads.com");
@@ -78,9 +107,9 @@ export async function activate(context: ExtensionContext) {
     publisher?: string;
   };
 
-  // P1-22: Cursor is a VS Code fork; distinguish it so analytics/fraud see the real host.
-  const isCursor =
-    env.appName?.toLowerCase().includes("cursor") || env.uriScheme?.toLowerCase() === "cursor";
+  // P1-22: Cursor and Antigravity are VS Code forks; distinguish them so analytics/fraud see
+  // the real host. Each fork rebrands both appName and uriScheme, so match on either.
+  const hostPlatform = resolveHostPlatform();
 
   // P1-20: the host's IANA timezone (e.g. "America/New_York") for coarse install geo. No
   // precise location is collected. Guarded since Intl can throw in unusual runtimes.
@@ -92,7 +121,7 @@ export async function activate(context: ExtensionContext) {
   }
 
   runtime = createRuntime({
-    platform: isCursor ? "cursor" : "vscode",
+    platform: hostPlatform,
     secureStore: context.secrets,
     localStore: localStore.store,
     sqliteDatabase: localStore.sqliteDatabase,
@@ -104,6 +133,13 @@ export async function activate(context: ExtensionContext) {
     ...(extensionManifest.version ? { extensionVersion: extensionManifest.version } : {}),
     ...(extensionManifest.publisher ? { publisher: extensionManifest.publisher } : {}),
     onVersionRejected: () => void promptExtensionUpdate(context.extension.id),
+    onUpdateAvailable: (info) =>
+      void promptExtensionUpdate(
+        context.extension.id,
+        info.required
+          ? PAUSED_UPDATE_MESSAGE
+          : `RuntimeAds ${info.latestVersion} is available. Update to get the latest improvements.`,
+      ),
     onSessionExpired: () => void promptSignInAgain(),
     agentDetectors: [
       new ClaudeAdapter(),

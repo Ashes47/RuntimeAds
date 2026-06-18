@@ -1,6 +1,7 @@
 import type { CachedAllocation, Platform } from "@runtimeads/sdk-contracts";
 
 import type { QueuedEvent } from "../events/event-queue";
+import type { ExtensionRequirements } from "../version/version-check-service";
 
 export interface RuntimeApiClientOptions {
   baseUrl: string;
@@ -300,6 +301,25 @@ export class RuntimeApiClient {
         events: operationalEvents.map((record) => toApiEvent(record)),
       });
     }
+  }
+
+  async getExtensionRequirements(): Promise<ExtensionRequirements> {
+    // Public (no-auth) gate config; the version-check poll compares it to the running build.
+    const response = await this.getJson<{
+      gate_enabled: boolean;
+      publisher: string;
+      extension_id: string;
+      latest_version: string;
+      min_supported_version: string;
+    }>("/v1/runtime/extension-requirements");
+
+    return {
+      gateEnabled: response.gate_enabled,
+      publisher: response.publisher,
+      extensionId: response.extension_id,
+      latestVersion: response.latest_version,
+      minSupportedVersion: response.min_supported_version,
+    };
   }
 
   async getEventAccountingTrace(eventId: string): Promise<EventAccountingTraceResponse> {

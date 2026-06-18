@@ -27,6 +27,7 @@ in the panel spinner, the terminal, or the status bar. You earn during the wait,
 - **Detects idle moments** — when your coding agent is thinking or running a tool and you're just waiting.
 - **Shows one tasteful ad** in that moment: the Claude/Codex panel spinner, the terminal, or the status bar. Never in your chat, never as a popup.
 - **Pays you for the attention** — a revenue share on every verified impression, cashable once you hit the payout threshold.
+- **No lock-in** — uninstall and restart, and everything it touched is put back exactly as it was. Nothing lingers in your editor or home directory, and the whole client is here so you can verify it.
 
 ## Privacy first
 

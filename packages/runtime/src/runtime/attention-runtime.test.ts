@@ -220,6 +220,65 @@ describe("DefaultAttentionRuntime", () => {
     expect(runtime.getStatus().display?.impressions).toBe(1);
   });
 
+  it("pauses ad rendering once the build is version-rejected (HTTP 426)", async () => {
+    const runtime = createRuntime({
+      platform: "vscode",
+      secureStore: createSecureStore(),
+      localStore: new MemoryKeyValueStore(),
+      idFactory: () => "install-rejected",
+      registrationClient: {
+        async registerInstall() {
+          throw Object.assign(new Error("upgrade required"), { status: 426 });
+        },
+      },
+    });
+
+    await runtime.start();
+    await runtime.getAuthSessionManager().storeSession({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      developerId: "00000000-0000-4000-8000-000000000101",
+    });
+
+    await runtime.ensureInstallRegistered(true); // hits the 426 → client-side pause
+    expect(runtime.isAdServingPaused()).toBe(true);
+
+    // Cached inventory is available, but a waiting session must not surface it while paused.
+    await runtime.getCacheStore().put({
+      id: "alloc-rejected",
+      value: {
+        allocationId: "alloc-rejected",
+        campaignId: "campaign-rejected",
+        brand: "Rejected Brand",
+        iconUrl: "https://example.com/icon.png",
+        headline: "Rejected headline",
+        destinationUrl: "https://example.com",
+        cpmCents: 0,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      },
+    });
+
+    const agent = runtime.getAgentDetectionService();
+    const sessionId = "session-rejected";
+    await agent.ingest({
+      agent: "claude_code",
+      activity: "waiting_started",
+      occurredAt: "2026-01-01T10:00:00.000Z",
+      sessionId,
+      detectionMethod: "hook",
+      waitingReason: "thinking",
+    });
+    await agent.ingest({
+      agent: "claude_code",
+      activity: "waiting_ended",
+      occurredAt: "2026-01-01T10:00:10.000Z",
+      sessionId,
+      detectionMethod: "hook",
+    });
+
+    expect(runtime.getStatus().display?.impressions ?? 0).toBe(0);
+  });
+
   it("reports active cache count in runtime status", async () => {
     const runtime = createRuntime({
       platform: "vscode",

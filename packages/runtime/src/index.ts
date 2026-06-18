@@ -12,6 +12,13 @@ export {
 } from "./db/sqlite-key-value-store";
 export { EventQueue, type QueuedEvent, type QueueState } from "./events/event-queue";
 export { HeartbeatService, type HeartbeatClient } from "./heartbeat/heartbeat-service";
+export {
+  VersionCheckService,
+  type ExtensionRequirements,
+  type ExtensionRequirementsClient,
+  type UpdateAvailableInfo,
+} from "./version/version-check-service";
+export { compareVersions, isVersionOlder } from "./version/version-compare";
 export { InstallManager, type InstallRegistrationClient } from "./install/install-manager";
 export { type SecureStore } from "./secure-store";
 export { MemoryKeyValueStore, type KeyValueStore } from "./storage/key-value-store";

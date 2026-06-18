@@ -11,7 +11,7 @@ Works in **VS Code** and **Cursor**, with **Claude Code** and **Codex**.
 - **Earn during dead time** — ads appear only while an agent is waiting, never in your prompts or its answers.
 - **One tasteful sponsor** — a single line, not a cluttered panel. Hide it anytime.
 - **Privacy-first** — RuntimeAds never reads or collects prompts, responses, code, terminal output, file paths, or repository names. See [Privacy](#privacy).
-- **Fully reversible** — every change RuntimeAds makes is backed up and can be undone (see [Removing RuntimeAds](#removing-runtimeads)).
+- **No lock-in** — uninstall leaves nothing behind. Most tools that reach into your editor dig in and stay; RuntimeAds is built to do the opposite. Every change is backed up and put back on removal, and nothing lingers after you restart (see [Removing RuntimeAds](#removing-runtimeads)).
 
 ## Quick start
 
@@ -65,6 +65,13 @@ entries and restores your original files; it never deletes config you wrote.
 | `runtimeads.apiBaseUrl`           | RuntimeAds API URL. Leave the default unless you self-host.                   |
 
 ## Removing RuntimeAds
+
+**No lock-in.** Remove RuntimeAds and everything it touched is put back exactly as it was: your
+Claude/Codex panels restored from backup, the global CLI changes undone, the wait-time hooks
+stripped from every workspace, and its one folder (`~/.runtimeads`) deleted. No ad code, no
+tracking, and no changes to your other extensions survive removal, and your login never lived
+anywhere but your editor's secure storage. Because the client is source-available, you can confirm
+this yourself instead of taking our word for it.
 
 Pick the level that matches what you want — from "hide it for now" to "remove it completely."
 

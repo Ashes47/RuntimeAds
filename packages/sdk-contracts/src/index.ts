@@ -1,4 +1,4 @@
-export type Platform = "vscode" | "cursor";
+export type Platform = "vscode" | "cursor" | "antigravity";
 export type Agent = "claude_code" | "codex_cli";
 
 export type AttentionState = "idle" | "working" | "waiting" | "complete";

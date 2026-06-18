@@ -4,7 +4,7 @@
   "description": "Get paid while Claude Code and Codex think. Privacy-safe sponsor ads during AI wait time.",
   "publisher": "runtimeads",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "SEE LICENSE IN LICENSE.txt",
   "icon": "media/favicon.png",
   "main": "./dist/extension.cjs",
@@ -24,7 +24,8 @@
   "scripts": {
     "build": "tsup && tsup --config tsup.dashboard.config.ts && node ./scripts/copy-sql-wasm.mjs && node ./scripts/copy-claude-hook.mjs",
     "vscode:uninstall": "node ./dist/uninstall.cjs",
-    "package": "pnpm build && node ./scripts/verify-vsix-artifacts.mjs && vsce package --no-dependencies",
+    "package": "pnpm build && node ./scripts/update-hook-hashes.mjs && node ./scripts/verify-vsix-artifacts.mjs && vsce package --no-dependencies",
+    "publish:local": "node ./scripts/publish-local.mjs",
     "install:cursor": "node ./scripts/install-vsix.mjs cursor",
     "install:code": "node ./scripts/install-vsix.mjs code",
     "reinstall:cursor": "node ./scripts/install-vsix.mjs cursor --uninstall-first",
