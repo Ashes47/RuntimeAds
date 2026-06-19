@@ -61,6 +61,12 @@ export interface RuntimeOptions {
   onUpdateAvailable?: (info: UpdateAvailableInfo) => void;
   /** Called when the refresh token is rejected and the user must sign in again. */
   onSessionExpired?: () => void;
+  /**
+   * Called when the account is banned (API returns 403 ``account_banned``). The runtime has
+   * already signed out, stopped, and cleared cached ads by the time this fires — the host should
+   * just inform the user (they can still open the web dashboard to appeal).
+   */
+  onAccountBanned?: () => void;
   registrationClient?: InstallRegistrationClient;
   eventUploadClient?: EventUploadClient;
   heartbeatClient?: HeartbeatClient;
@@ -123,6 +129,8 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
   private startedAt: string | undefined;
   private lastError: string | undefined;
   private versionRejected = false;
+  private accountBanned = false;
+  private readonly onAccountBanned: (() => void) | undefined;
   // Install id we've already registered this session. ensureInstallRegistered runs before every
   // event-queue flush, so without this it would re-POST /v1/runtime/register on every sync cycle.
   private registeredInstallId: string | undefined;
@@ -130,6 +138,7 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
 
   constructor(options: RuntimeOptions) {
     this.onVersionRejected = options.onVersionRejected;
+    this.onAccountBanned = options.onAccountBanned;
     const localStore = options.localStore ?? new MemoryKeyValueStore();
     let apiClient: RuntimeApiClient | undefined;
     const getApiClient = () => {
@@ -141,6 +150,9 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
         baseUrl: options.apiBaseUrl,
         accessTokenProvider: async () => this.credentialVault.getAccessToken(),
         refreshAccessToken: async () => this.authSessionManager.refreshAccessToken(),
+        onAccountBanned: () => {
+          void this.handleAccountBanned();
+        },
       });
       return apiClient;
     };
@@ -544,6 +556,31 @@ export class DefaultAttentionRuntime implements AttentionRuntime {
     } finally {
       this.startedAt = undefined;
     }
+  }
+
+  /**
+   * The account was banned (403 ``account_banned``). Stop the runtime, sign out, and drop any
+   * cached ads so nothing keeps serving, then notify the host. Runs once and never throws —
+   * it is fired (not awaited) from the API client mid-request.
+   */
+  private async handleAccountBanned(): Promise<void> {
+    if (this.accountBanned) {
+      return;
+    }
+    this.accountBanned = true;
+    this.lastError = "account_banned";
+    try {
+      await this.stop();
+    } catch {
+      // stop() already recorded the error; banning must proceed regardless.
+    }
+    try {
+      await this.authSessionManager.logout();
+      await this.cacheStore.clear();
+    } catch {
+      // Best-effort sign-out/cache-clear; the 403 will keep any future calls blocked anyway.
+    }
+    this.onAccountBanned?.();
   }
 
   getStatus(): RuntimeStatus {

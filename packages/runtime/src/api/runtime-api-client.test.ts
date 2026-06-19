@@ -165,6 +165,36 @@ describe("RuntimeApiClient", () => {
     expect(headers).toEqual(["Bearer expired-token", "Bearer fresh-token"]);
   });
 
+  it("fires onAccountBanned and throws (no retry) on 403 account_banned", async () => {
+    let banned = 0;
+    let calls = 0;
+    const client = new RuntimeApiClient({
+      baseUrl: "http://api.test",
+      accessTokenProvider: async () => "access-token",
+      onAccountBanned: () => {
+        banned += 1;
+      },
+      fetcher: async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ detail: "account_banned" }), { status: 403 });
+      },
+    });
+
+    await expect(
+      client.heartbeat({
+        installId: "install-1",
+        platform: "vscode",
+        sdkVersion: "0.1.0",
+        cacheSize: 0,
+        queueSize: 0,
+        online: true,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(banned).toBe(1);
+    expect(calls).toBe(1); // terminal — never retried
+  });
+
   it("routes agent signals and operational events to separate batch endpoints", async () => {
     const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
     const client = new RuntimeApiClient({

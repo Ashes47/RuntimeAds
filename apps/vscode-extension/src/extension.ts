@@ -80,6 +80,24 @@ async function promptSignInAgain(): Promise<void> {
   }
 }
 
+// The account was banned. The runtime has already signed out, stopped, and cleared cached ads;
+// point the user to the dashboard where they can read the reason and appeal.
+async function notifyAccountBanned(dashboardUrl: string): Promise<void> {
+  const choice = await window.showErrorMessage(
+    "Your RuntimeAds account has been suspended. The extension has signed out and stopped serving ads. " +
+      "Open your dashboard to see the reason and appeal.",
+    "Open dashboard",
+  );
+  if (choice === "Open dashboard") {
+    await env.openExternal(Uri.parse(dashboardUrl));
+  }
+}
+
+// Best-effort web dashboard URL derived from the API base (api.runtimeads.com → runtimeads.com).
+function dashboardUrlFromApi(apiBaseUrl: string): string {
+  return `${apiBaseUrl.replace("://api.", "://")}/developer`;
+}
+
 // P1-22 / Antigravity: Cursor and Antigravity are VS Code forks that rebrand both appName and
 // uriScheme. Map the host to our platform tag so analytics/fraud attribute installs to the real
 // editor; default to plain "vscode".
@@ -141,6 +159,7 @@ export async function activate(context: ExtensionContext) {
           : `RuntimeAds ${info.latestVersion} is available. Update to get the latest improvements.`,
       ),
     onSessionExpired: () => void promptSignInAgain(),
+    onAccountBanned: () => void notifyAccountBanned(dashboardUrlFromApi(apiBaseUrl)),
     agentDetectors: [
       new ClaudeAdapter(),
       new CodexAdapter(),

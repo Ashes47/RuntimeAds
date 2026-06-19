@@ -9,6 +9,12 @@ export interface RuntimeApiClientOptions {
   timeoutMs?: number;
   accessTokenProvider?: () => Promise<string | undefined>;
   refreshAccessToken?: () => Promise<string | undefined>;
+  /**
+   * Called when the API rejects a data request with 403 ``account_banned`` — the account has
+   * been banned, so the runtime should sign out and stop serving. Fired before the error is
+   * rethrown; invoked at most as often as banned responses arrive (handler must be idempotent).
+   */
+  onAccountBanned?: () => void;
   maxRetries?: number;
 }
 
@@ -375,6 +381,12 @@ export class RuntimeApiClient {
       } catch (error) {
         lastError = error;
 
+        // A banned account is terminal — sign out and stop, never retry.
+        if (error instanceof RuntimeApiError && error.isAccountBanned) {
+          this.options.onAccountBanned?.();
+          throw error;
+        }
+
         if (
           !isAuthPath &&
           error instanceof RuntimeApiError &&
@@ -448,6 +460,11 @@ export class RuntimeApiError extends Error {
     const body = detail ? ` — ${detail}` : "";
     super(`Runtime API request failed: ${status}${location}${body}`);
     this.retryable = status === 408 || status === 429 || status >= 500;
+  }
+
+  /** 403 with the API's ``account_banned`` detail — the developer has been banned. */
+  get isAccountBanned(): boolean {
+    return this.status === 403 && (this.detail ?? "").includes("account_banned");
   }
 }
 
