@@ -57,13 +57,13 @@ export function buildRuntimeAdsMenuItems(runtime: AttentionRuntime): RuntimeAdsM
       command: "runtimeads.installTerminalHooks",
     },
     {
-      label: "Restore Claude & Codex panels",
-      description: "Remove RuntimeAds changes from Claude and Codex panel files",
+      label: "Reset Claude & Codex panels",
+      description: "Undo panel changes only — stays signed in (use if a panel looks wrong)",
       command: "runtimeads.restoreWebviewPatches",
     },
     {
-      label: "Remove RuntimeAds integration",
-      description: "Remove RuntimeAds hooks and panel changes from Claude & Codex",
+      label: "Remove RuntimeAds & sign out",
+      description: "Full teardown: remove all hooks + panel changes and sign out",
       command: "runtimeads.removeIntegrations",
     },
   );

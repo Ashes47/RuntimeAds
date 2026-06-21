@@ -7,13 +7,14 @@ import {
   readFileSync,
   readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import type { CachedAllocation } from "@runtimeads/sdk-contracts";
 import { formatCliAdText, stripControlChars } from "@runtimeads/runtime";
@@ -156,7 +157,11 @@ export class CodexCliSyncService {
     const resolved = this.resolveCodexEntry(shim);
     // Hard stop: a wrapper that execs the shim itself turns `codex` into a file Node parses as JS
     // and crashes on our `#` marker. Better to leave codex unpatched (no ad) than to break it.
-    if (this.samePath(resolved.entryPath, shim)) {
+    // Compare LITERAL paths, not realpaths: for the normal symlink install (bin/codex -> codex.js)
+    // realpath(shim) === entryPath, which is perfectly safe to wrap — we replace the symlink with a
+    // regular wrapper that execs the real entry. Self-exec only happens if the wrapper's own install
+    // path equals what it would exec, i.e. the literal paths match.
+    if (resolve(resolved.entryPath) === resolve(shim)) {
       throw new Error("refusing to wrap codex: could not resolve the real entry (would self-exec)");
     }
     this.writeShimMetadata({
@@ -166,17 +171,45 @@ export class CodexCliSyncService {
       ...(resolved.symlinkTarget ? { symlinkTarget: resolved.symlinkTarget } : {}),
     });
 
-    if (lstatSync(shim).isSymbolicLink()) {
-      unlinkSync(shim);
-    }
-
     const wrapper = this.renderWrapper(resolved.entryPath);
-    writeFileSync(shim, wrapper, "utf8");
-    if (!shim.toLowerCase().endsWith(".cmd")) {
+    this.atomicWriteShim(shim, wrapper);
+  }
+
+  // TD-033: replace the original `unlinkSync(shim) → writeFileSync(shim)` (a crash between the two
+  // left the user with NO `codex` binary) with write-temp → chmod → rename. rename replaces the
+  // path entry atomically and, crucially, does NOT follow a symlink shim (a bare writeFileSync would
+  // write THROUGH the symlink into the real codex entry), so the explicit unlink is no longer needed.
+  private atomicWriteShim(shim: string, wrapper: string): void {
+    const isCmd = shim.toLowerCase().endsWith(".cmd");
+    const tmp = `${shim}.runtimeads-tmp-${process.pid}-${Date.now()}`;
+    try {
+      writeFileSync(tmp, wrapper, "utf8");
+      if (!isCmd) {
+        try {
+          chmodSync(tmp, 0o755);
+        } catch {
+          // Best-effort on POSIX.
+        }
+      }
+      renameSync(tmp, shim);
+    } catch {
       try {
-        chmodSync(shim, 0o755);
+        unlinkSync(tmp);
       } catch {
-        // Best-effort on POSIX.
+        // Ignore temp cleanup failures.
+      }
+      // Degraded fallback: the original non-atomic path. A bare writeFileSync follows a symlink, so
+      // unlink it first to replace the entry rather than the real codex binary it points at.
+      if (existsSync(shim) && lstatSync(shim).isSymbolicLink()) {
+        unlinkSync(shim);
+      }
+      writeFileSync(shim, wrapper, "utf8");
+      if (!isCmd) {
+        try {
+          chmodSync(shim, 0o755);
+        } catch {
+          // Best-effort on POSIX.
+        }
       }
     }
   }
@@ -276,14 +309,6 @@ export class CodexCliSyncService {
       return firstLine?.trim();
     } catch {
       return undefined;
-    }
-  }
-
-  private samePath(a: string, b: string): boolean {
-    try {
-      return realpathSync(a) === realpathSync(b);
-    } catch {
-      return a === b;
     }
   }
 

@@ -13,11 +13,14 @@ export const HOOKS_CONSENT_GRANTED_KEY = "runtimeads.hooks.consentGranted";
 export const HOOKS_NEVER_PROMPT_KEY = "runtimeads.hooks.neverPrompt";
 
 /**
- * One-time global setup consent. Hooks are installed user-globally (into ~/.claude / ~/.codex),
- * so this no longer needs an open workspace and is asked once per machine. Accepting installs the
- * hooks; "Don't ask again" suppresses it permanently. State lives in globalState (machine-wide).
+ * Auto-setup on activation. Installing the extension is treated as consent (the prior consent modal
+ * is gone), so hooks install automatically into ~/.claude / ~/.codex the first time — no click
+ * needed. Idempotent and self-suppressing: no-ops if hooks are already installed, or if the user
+ * explicitly opted out (e.g. via "Remove RuntimeAds & Sign Out", which sets the opt-out flag). A
+ * single non-blocking toast the first time keeps the change transparent and points at the undo. If
+ * setup can't complete now (e.g. Claude/Codex isn't installed yet) the hourly nag retries.
  */
-export async function promptForHookConsent(
+export async function autoSetupHooks(
   context: ExtensionContext,
   runtime: AttentionRuntime,
   endpoint: ClaudeHookServerHandle,
@@ -26,43 +29,30 @@ export async function promptForHookConsent(
   claudeCliSyncService?: ClaudeCliSyncService,
 ): Promise<void> {
   if (context.globalState.get<boolean>(HOOKS_NEVER_PROMPT_KEY)) {
-    return;
-  }
-  if (context.globalState.get<boolean>(HOOKS_CONSENT_GRANTED_KEY)) {
-    return;
+    return; // user explicitly removed / opted out — don't silently re-install
   }
   if (await areTerminalHooksInstalled()) {
     await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
     return;
   }
 
-  const choice = await window.showInformationMessage(
-    "RuntimeAds can connect to Claude Code and Codex to detect when your AI is waiting and show a sponsor ad during that time — so you earn while you wait. It adds one hook to your Claude & Codex config (once, globally) and never reads your prompts, code, or terminal output.",
-    { modal: true },
-    "Set up Claude & Codex",
-    "Don't ask again",
-  );
-
-  if (choice === "Set up Claude & Codex") {
-    try {
-      await installTerminalHooks(
-        context,
-        runtime,
-        endpoint,
-        claudeWebviewService,
-        codexWebviewService,
-        claudeCliSyncService,
-      );
-      await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown hook install error";
-      void window.showErrorMessage(`Could not set up Claude & Codex: ${message}`);
-    }
-    return;
-  }
-
-  if (choice === "Don't ask again") {
-    await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, true);
+  try {
+    await installTerminalHooks(
+      context,
+      runtime,
+      endpoint,
+      claudeWebviewService,
+      codexWebviewService,
+      claudeCliSyncService,
+    );
+    await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
+    void window.showInformationMessage(
+      "RuntimeAds is set up for Claude Code & Codex — you'll earn a sponsor ad while your AI thinks. " +
+        "Restart any running claude/codex session to pick it up. Undo any time with “Remove RuntimeAds & Sign Out.”",
+    );
+  } catch {
+    // Couldn't set up now (e.g. Claude/Codex not installed yet). Leave the flags untouched so the
+    // hourly nag retries — don't mark consent, don't opt out.
   }
 }
 

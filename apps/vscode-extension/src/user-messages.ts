@@ -9,6 +9,8 @@ const REASON_MAP: Record<string, string> = {
     "Could not read Claude Code — try reloading the window.",
   "Unsupported Claude Code build (spinner markers missing)":
     "Your Claude Code version is not supported yet — update the Claude Code extension.",
+  "Claude Code bundle modified (anchors missing while patched)":
+    "Claude Code looks modified by another tool — reinstall the Claude Code extension, then reload.",
   "Claude Code panel has not been patched yet":
     "Sponsor ads are not set up in the Claude panel yet — run Set Up Claude & Codex.",
   "Claude Code extension not found":
@@ -18,6 +20,8 @@ const REASON_MAP: Record<string, string> = {
   "Unable to read Codex webview bundle": "Could not read Codex — try reloading the window.",
   "Unsupported Codex build (thinking-shimmer anchors missing)":
     "Your Codex version is not supported yet — update the Codex extension.",
+  "Codex bundle modified (anchors missing while patched)":
+    "Codex looks modified by another tool — reinstall the Codex extension, then reload.",
   "Codex panel has not been patched yet":
     "Sponsor ads are not set up in the Codex panel yet — run Set Up Claude & Codex.",
   "Codex extension not found":

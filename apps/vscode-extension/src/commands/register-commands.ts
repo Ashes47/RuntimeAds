@@ -100,6 +100,8 @@ export function registerCommands(
           claudeCliSyncService,
         );
         await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, true);
+        // Manually setting up re-enables auto-setup if the user had previously opted out via Remove.
+        await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, undefined);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown hook install error";
         window.showErrorMessage(`Could not set up Claude & Codex: ${message}`);
@@ -196,11 +198,12 @@ export function registerCommands(
         warnings.push(error instanceof Error ? error.message : "sign-out/local-data wipe failed");
       }
 
-      // Reset the prompt-gating flags so the next activation (or a reinstall) re-runs the setup
-      // consent — otherwise "Don't ask again" / already-consented state would silently suppress
-      // setup forever after a removal.
+      // Setup is now automatic on activation, so an explicit removal must NOT silently re-install on
+      // the next reload. Clear the consent flag and OPT OUT (never-prompt) so auto-setup stays off
+      // until the user runs "Set Up Claude & Codex" again (which clears the opt-out), or does a clean
+      // reinstall (which clears globalState entirely).
       await context.globalState.update(HOOKS_CONSENT_GRANTED_KEY, undefined);
-      await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, undefined);
+      await context.globalState.update(HOOKS_NEVER_PROMPT_KEY, true);
       await statusBar.refresh();
 
       if (warnings.length > 0) {

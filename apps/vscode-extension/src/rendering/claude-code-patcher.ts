@@ -1,4 +1,14 @@
-import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
 import { locateClaudeCodeExtensionJs } from "./claude-code-locator";
 import { sha256 } from "./webview-host";
 
@@ -51,14 +61,58 @@ export class ClaudeCodeWebviewPatcher {
     }
 
     if (this.findVerbArray(pristine) === null) {
+      // Distinguish "never patched, just an unsupported build" (→ update the extension) from
+      // "already patched but the anchors are gone after stripping our block" — that means the bundle
+      // was modified by something else or corrupted, and re-patching can't recover it (→ reinstall).
       return {
         ok: false,
-        reason: "Unsupported Claude Code build (spinner markers missing)",
+        reason: this.isPatched()
+          ? "Claude Code bundle modified (anchors missing while patched)"
+          : "Unsupported Claude Code build (spinner markers missing)",
+        target: this.target,
+      };
+    }
+
+    // CSP gate: the injected ad fetches the loopback, which the webview blocks unless we widen
+    // connect-src in the sibling extension.js. If we can't patch CSP, patching the bundle only
+    // risks corruption for an ad that could never load — so fail closed here, before any write.
+    const sibling = locateClaudeCodeExtensionJs(this.target);
+    if (!sibling || !existsSync(sibling)) {
+      return {
+        ok: false,
+        reason: "Claude Code extension.js (CSP host) not found",
+        target: this.target,
+      };
+    }
+
+    const cspSource = readFileSync(sibling, "utf8");
+    if (!cspSource.includes(CSP_MARK) && !CSP_ANCHOR_RE.test(cspSource)) {
+      return { ok: false, reason: "Claude Code CSP anchor not found", target: this.target };
+    }
+
+    if (!this.backupWritable()) {
+      return {
+        ok: false,
+        reason: "Claude Code backup directory not writable",
         target: this.target,
       };
     }
 
     return { ok: true, target: this.target };
+  }
+
+  private backupWritable(): boolean {
+    try {
+      // An existing backup proves we could already write here; otherwise the target's dir must be
+      // writable so ensureBackup() can lay down the sidecar.
+      if (existsSync(this.backupPath())) {
+        return true;
+      }
+      accessSync(dirname(this.target), constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   reapplyPatch(params: ClaudeCodePatchParams): ClaudeCodePatchResult {
@@ -113,7 +167,27 @@ export class ClaudeCodeWebviewPatcher {
         this.atomicWrite(this.target, nextBuf);
       }
 
-      this.patchCsp();
+      try {
+        this.patchCsp();
+      } catch (cspError) {
+        // Transaction: the CSP write failed after the bundle was patched. Roll the bundle back to
+        // pristine (the backup we just made) so we never leave a patched bundle whose ad can't
+        // reach the loopback.
+        try {
+          this.atomicWrite(this.target, pristineBuf);
+        } catch {
+          // Rollback failed too — the backup sidecar remains for restore/uninstall to recover.
+        }
+        return {
+          ok: false,
+          reason:
+            cspError instanceof Error
+              ? `csp patch failed: ${cspError.message}`
+              : "csp patch failed",
+          target: this.target,
+        };
+      }
+
       return { ok: true, target: this.target };
     } catch (error) {
       return {
@@ -312,7 +386,13 @@ export class ClaudeCodeWebviewPatcher {
       } catch {
         // Ignore temp cleanup failures.
       }
+      // Degraded fallback: a direct write is non-atomic but still better than aborting the patch.
       writeFileSync(target, data);
+    }
+    // Post-write verify: the on-disk bytes must match what we intended. A mismatch (truncated /
+    // concurrently-clobbered write) throws so the caller returns failure and leaves the backup.
+    if (sha256(readFileSync(target)) !== sha256(data)) {
+      throw new Error("post-write verification failed");
     }
   }
 }

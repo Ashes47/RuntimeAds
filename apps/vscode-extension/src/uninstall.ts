@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { ClaudeCodeWebviewPatcher } from "./rendering/claude-code-patcher";
-import { locateClaudeCodeWebviewTarget } from "./rendering/claude-code-locator";
+import { listAllClaudeCodeWebviewTargets } from "./rendering/claude-code-locator";
 import { listAllCodexWebviewTargets } from "./rendering/codex-locator";
 import { CodexWebviewPatcher } from "./rendering/codex-patcher";
 import { ClaudeCliSyncService } from "./signals/claude-cli-sync";
@@ -26,8 +26,9 @@ import { removeGlobalHooks, removeTerminalHooks } from "./signals/remove-termina
 const NO_ASSET = "";
 
 function restoreClaudeWebview(): void {
-  const target = locateClaudeCodeWebviewTarget();
-  if (target) {
+  // Restore EVERY Claude install (not just the serving target) — matches the Codex loop so an
+  // uninstall leaves no patched bundle behind on any editor / version.
+  for (const target of listAllClaudeCodeWebviewTargets()) {
     new ClaudeCodeWebviewPatcher(target, NO_ASSET).restore();
   }
 }

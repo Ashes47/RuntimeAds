@@ -114,6 +114,21 @@ export class AuthSessionManager {
     return this.vault.getAccessToken();
   }
 
+  /**
+   * True if any credential is still persisted in the vault (access OR refresh token). Read-only —
+   * does NOT mutate auth status, so it is safe to call before `start()`. Used by the host at
+   * activation to detect stale keychain credentials left behind by a prior install: the
+   * `vscode:uninstall` hook wipes `~/.runtimeads` but can't reach SecretStorage, so a reinstall
+   * would otherwise resurrect a dead session.
+   */
+  async hasStoredCredentials(): Promise<boolean> {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.vault.getAccessToken(),
+      this.vault.getRefreshToken(),
+    ]);
+    return Boolean(accessToken || refreshToken);
+  }
+
   async refreshAccessToken(): Promise<string | undefined> {
     const refreshToken = await this.vault.getRefreshToken();
     if (!refreshToken || !this.client) {

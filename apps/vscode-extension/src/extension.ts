@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import type { ExtensionContext } from "vscode";
 import { commands, env, Uri, window, workspace } from "vscode";
 
@@ -23,7 +27,7 @@ import {
 } from "./signals/claude-hook-display";
 import { ClaudeCliSyncService } from "./signals/claude-cli-sync";
 import { CodexCliSyncService } from "./signals/codex-cli-sync";
-import { nagHookSetupIfNeeded, promptForHookConsent } from "./signals/hook-consent-prompt";
+import { autoSetupHooks, nagHookSetupIfNeeded } from "./signals/hook-consent-prompt";
 import { refreshTerminalHooksIfNeeded } from "./signals/terminal-hook-installer";
 import { registerTerminalAdLinkProvider } from "./signals/terminal-ad-link-provider";
 import { getCachedHookIntegrity, refreshHookIntegrityState } from "./signals/hook-integrity";
@@ -117,6 +121,12 @@ export async function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration("runtimeads");
   const apiBaseUrl = config.get<string>("apiBaseUrl", "https://api.runtimeads.com");
 
+  // #9: sample the RuntimeAds home dir BEFORE anything (re)creates it. The `vscode:uninstall` hook
+  // deletes ~/.runtimeads but cannot reach SecretStorage, so its absence here (with creds still in
+  // the keychain) is our signal that this is a reinstall-after-uninstall — see the cleanup below.
+  // `createLocalStore` writes to the editor's globalStorage, not ~/.runtimeads, so this stays valid.
+  const runtimeadsHomePresentAtStartup = existsSync(join(homedir(), ".runtimeads"));
+
   const localStore = await createLocalStore(context);
   disposeLocalStore = localStore.dispose;
 
@@ -203,6 +213,24 @@ export async function activate(context: ExtensionContext) {
   context.subscriptions.push(
     window.registerUriHandler(new AuthCallbackHandler(runtime, statusBar)),
   );
+
+  // #9: reinstall-after-uninstall backstop. If the home dir was absent at startup (a fresh OR a
+  // just-uninstalled install) AND credentials still survive in SecretStorage, this is a reinstall —
+  // the uninstall hook wiped ~/.runtimeads but couldn't clear the keychain. Drop the stale identity
+  // BEFORE start() so we don't resurrect a dead session/install. A truly fresh install has no creds,
+  // so this is a no-op there. Best-effort: a failure just means the user may need to sign in again.
+  if (
+    !runtimeadsHomePresentAtStartup &&
+    (await runtime.getAuthSessionManager().hasStoredCredentials())
+  ) {
+    try {
+      await runtime.getAuthSessionManager().logout();
+      await runtime.getInstallManager().clearStoredInstall();
+    } catch {
+      // Ignore — clean-slate is best-effort.
+    }
+  }
+
   await runtime.start();
   await reportPatchPreflight(claudeWebviewService, codexWebviewService, codexCliSyncService);
   await Promise.all([claudeWebviewService.primeCsp(), codexWebviewService.primeCsp()]);
@@ -256,7 +284,7 @@ export async function activate(context: ExtensionContext) {
       );
     }
 
-    await promptForHookConsent(
+    await autoSetupHooks(
       context,
       runtime,
       claudeHookServer,

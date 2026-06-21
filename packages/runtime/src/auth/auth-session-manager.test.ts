@@ -171,6 +171,21 @@ describe("AuthSessionManager", () => {
     expect(await vault.getRefreshToken()).toBeUndefined();
   });
 
+  it("hasStoredCredentials reflects the vault without mutating auth status", async () => {
+    const vault = new CredentialVault(createSecureStore());
+    const manager = new AuthSessionManager(vault);
+
+    expect(await manager.hasStoredCredentials()).toBe(false);
+    expect(manager.getStatus()).toBe("unauthenticated"); // read-only — safe before start()
+
+    await vault.setRefreshToken("refresh-token");
+    expect(await manager.hasStoredCredentials()).toBe(true);
+    expect(manager.getStatus()).toBe("unauthenticated"); // still not mutated
+
+    await manager.logout();
+    expect(await manager.hasStoredCredentials()).toBe(false);
+  });
+
   it("signs out and notifies (no spam) when the refresh token is rejected with 401", async () => {
     const vault = new CredentialVault(createSecureStore());
     await vault.setRefreshToken("dead-refresh-token");

@@ -1,4 +1,14 @@
-import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
 import { locateCodexExtensionJs } from "./codex-locator";
 import { sha256 } from "./webview-host";
 
@@ -98,14 +108,50 @@ export class CodexWebviewPatcher {
       !/defaultMessage:`Thinking`/.test(pristine) ||
       JSX_RE.exec(pristine) === null
     ) {
+      // Distinguish "never patched, just an unsupported build" (→ update the extension) from
+      // "already patched but the anchors are gone after stripping our block" — that means the bundle
+      // was modified by something else or corrupted, and re-patching can't recover it (→ reinstall).
       return {
         ok: false,
-        reason: "Unsupported Codex build (thinking-shimmer anchors missing)",
+        reason: this.isPatched()
+          ? "Codex bundle modified (anchors missing while patched)"
+          : "Unsupported Codex build (thinking-shimmer anchors missing)",
         target: this.target,
       };
     }
 
+    // CSP gate: the injected ad fetches the loopback, which the webview blocks unless we widen
+    // connect-src in the sibling extension.js. If we can't patch CSP, patching the bundle only
+    // risks corruption for an ad that could never load — so fail closed here, before any write.
+    const sibling = locateCodexExtensionJs(this.target);
+    if (!sibling || !existsSync(sibling)) {
+      return { ok: false, reason: "Codex extension.js (CSP host) not found", target: this.target };
+    }
+
+    const cspSource = readFileSync(sibling, "utf8");
+    if (!cspSource.includes(CSP_MARK) && !/`connect-src\s+[^`]*`/.test(cspSource)) {
+      return { ok: false, reason: "Codex CSP connect-src anchor not found", target: this.target };
+    }
+
+    if (!this.backupWritable()) {
+      return { ok: false, reason: "Codex backup directory not writable", target: this.target };
+    }
+
     return { ok: true, target: this.target };
+  }
+
+  private backupWritable(): boolean {
+    try {
+      // An existing backup proves we could already write here; otherwise the target's dir must be
+      // writable so ensurePristineSource() can lay down the sidecar.
+      if (existsSync(this.backupPath())) {
+        return true;
+      }
+      accessSync(dirname(this.target), constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   reapplyPatch(params: CodexPatchParams): CodexPatchResult {
@@ -169,7 +215,26 @@ export class CodexWebviewPatcher {
         this.atomicWrite(this.target, nextBuf);
       }
 
-      this.patchCsp();
+      try {
+        this.patchCsp();
+      } catch (cspError) {
+        // Transaction: the CSP write failed after the bundle was patched. Roll the bundle back to
+        // pristine so we never leave a patched bundle whose ad can't reach the loopback.
+        try {
+          this.atomicWrite(this.target, Buffer.from(pristine, "utf8"));
+        } catch {
+          // Rollback failed too — the backup sidecar remains for restore/uninstall to recover.
+        }
+        return {
+          ok: false,
+          reason:
+            cspError instanceof Error
+              ? `csp patch failed: ${cspError.message}`
+              : "csp patch failed",
+          target: this.target,
+        };
+      }
+
       return { ok: true, target: this.target };
     } catch (error) {
       return {
@@ -352,15 +417,20 @@ export class CodexWebviewPatcher {
     const tmp = `${target}.runtimeads-tmp-${process.pid}-${Date.now()}`;
     try {
       writeFileSync(tmp, data);
-      writeFileSync(target, data);
-      unlinkSync(tmp);
+      renameSync(tmp, target);
     } catch {
       try {
         unlinkSync(tmp);
       } catch {
         // Ignore temp cleanup failures.
       }
+      // Degraded fallback: a direct write is non-atomic but still better than aborting the patch.
       writeFileSync(target, data);
+    }
+    // Post-write verify: the on-disk bytes must match what we intended. A mismatch (truncated /
+    // concurrently-clobbered write) throws so the caller returns failure and leaves the backup.
+    if (sha256(readFileSync(target)) !== sha256(data)) {
+      throw new Error("post-write verification failed");
     }
   }
 }

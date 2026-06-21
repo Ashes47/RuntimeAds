@@ -124,11 +124,11 @@
       },
       {
         "command": "runtimeads.restoreWebviewPatches",
-        "title": "RuntimeAds: Restore Claude & Codex Panels"
+        "title": "RuntimeAds: Reset Claude & Codex Panels"
       },
       {
         "command": "runtimeads.removeIntegrations",
-        "title": "RuntimeAds: Remove Claude & Codex Integration"
+        "title": "RuntimeAds: Remove RuntimeAds & Sign Out"
       }
     ]
   }
