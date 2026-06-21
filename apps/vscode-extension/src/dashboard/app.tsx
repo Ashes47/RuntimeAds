@@ -111,8 +111,8 @@ export function App({ initialState }: { initialState: DashboardViewState }) {
           </dl>
           {status.signals.signalsGenerated === 0 ? (
             <p className="hint">
-              No wait time detected yet. Run <strong>RuntimeAds: Set Up Claude & Codex</strong>,
-              then use Claude or Codex in this workspace.
+              No wait time detected yet. Use Claude or Codex and we'll detect when it's waiting. If
+              nothing shows up, re-run <strong>RuntimeAds: Set Up Claude & Codex</strong>.
             </p>
           ) : null}
         </section>

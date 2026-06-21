@@ -15,11 +15,12 @@ Works in **VS Code** and **Cursor**, with **Claude Code** and **Codex**.
 
 ## Quick start
 
-1. **Install** RuntimeAds from the Marketplace / Open VSX (or a `.vsix`).
-2. **Sign in** — Command Palette → `RuntimeAds: Sign In`, then complete Google sign-in in your browser.
-3. **Set up Claude & Codex** — Command Palette → `RuntimeAds: Set Up Claude & Codex`. This connects RuntimeAds to your agents in the current workspace.
-4. **Trust Codex hooks** (if prompted) — in Codex, run `/hooks` and trust the RuntimeAds hooks so wait time can be counted. (Shortcut: `RuntimeAds: Trust Codex Hooks`.)
-5. **Work normally** — when an agent is waiting, you may see a sponsor ad, and your account earns.
+1. **Install** RuntimeAds from the Marketplace / Open VSX (or a `.vsix`). Setup runs **automatically** — RuntimeAds connects to Claude Code & Codex on first launch, no action needed.
+2. **Sign in** — Command Palette → `RuntimeAds: Sign In`, then complete Google sign-in in your browser. (Ads only ever serve while you're signed in — that's how earnings are credited.)
+3. **Trust Codex hooks** (if prompted) — in Codex, run `/hooks` and trust the RuntimeAds hooks so wait time can be counted. (Shortcut: `RuntimeAds: Trust Codex Hooks`.)
+4. **Work normally** — when an agent is waiting, you may see a sponsor ad, and your account earns.
+
+> Setup is automatic, but you can re-run it anytime with `RuntimeAds: Set Up Claude & Codex` (e.g. if you install Claude Code / Codex later).
 
 Open **`RuntimeAds: Open Dashboard`** anytime to check your connection and activity. View earnings and
 payouts on the [RuntimeAds developer portal](https://runtimeads.com/developer) (same account).
@@ -29,32 +30,32 @@ payouts on the [RuntimeAds developer portal](https://runtimeads.com/developer) (
 RuntimeAds is transparent about every file it touches. To show an ad in your agents' native UI, it
 makes small, **reversible** changes (each original is backed up alongside it):
 
-| Surface                   | What RuntimeAds does                                                         | Where                                                                    |
-| ------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Claude Code / Codex panel | Injects a small ad-overlay block into the editor's webview bundle            | the Claude Code / Codex extension files (a `.runtimeads-backup` is kept) |
-| Claude / Codex CLI        | Adds a spinner verb + status-line command so the CLI can show an ad          | `~/.claude/settings.json` (global)                                       |
-| Codex CLI launcher        | Wraps the global `codex` command so it can print a one-line sponsor at start | your npm `codex` shim (original recorded for restore)                    |
-| This workspace            | Adds wait-time hooks so RuntimeAds knows when an agent is waiting            | `.claude/settings.json` and `.codex/hooks.json` in the open repo         |
+| Surface                   | What RuntimeAds does                                                               | Where                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Claude Code / Codex panel | Injects a small ad-overlay block into the editor's webview bundle                  | the Claude Code / Codex extension files (a `.runtimeads-backup` is kept) |
+| Claude / Codex CLI        | Adds a spinner verb + status-line command so the CLI can show an ad                | `~/.claude/settings.json` (global)                                       |
+| Codex CLI launcher        | Wraps the global `codex` command so it can print a one-line sponsor at start       | your npm `codex` shim (original recorded for restore)                    |
+| Wait-time hooks           | Adds hooks so RuntimeAds knows when an agent is waiting (installed once, globally) | your global Claude & Codex config (`~/.claude`, `~/.codex`)              |
 
 All of this is undone by the removal commands below — RuntimeAds only ever removes **its own**
 entries and restores your original files; it never deletes config you wrote.
 
 ## Commands
 
-| Command                                     | What it does                                                  |
-| ------------------------------------------- | ------------------------------------------------------------- |
-| `RuntimeAds: Sign In`                       | Connect your RuntimeAds account                               |
-| `RuntimeAds: Sign Out`                      | Disconnect this editor                                        |
-| `RuntimeAds: Open Dashboard`                | Account status and activity inside the editor                 |
-| `RuntimeAds: Set Up Claude & Codex`         | Enable sponsor ads and wait-time detection in this workspace  |
-| `RuntimeAds: Trust Codex Hooks`             | Open Codex and trust RuntimeAds hooks                         |
-| `RuntimeAds: Dismiss Sponsor Ad`            | Hide the current sponsor until agents finish waiting          |
-| `RuntimeAds: Restore Sponsor Ads`           | Show sponsors again                                           |
-| `RuntimeAds: Open Active Ad`                | Open the current sponsor in your browser                      |
-| `RuntimeAds: Help & Status`                 | Connection details and troubleshooting                        |
-| `RuntimeAds: Menu`                          | Quick actions from the status bar                             |
-| `RuntimeAds: Restore Claude & Codex Panels` | Undo the panel/CLI patches (extension stays installed)        |
-| `RuntimeAds: Remove from This Workspace`    | Undo everything for this repo, sign out, and clear local data |
+| Command                                    | What it does                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `RuntimeAds: Sign In`                      | Connect your RuntimeAds account                                                      |
+| `RuntimeAds: Sign Out`                     | Disconnect this editor                                                               |
+| `RuntimeAds: Open Dashboard`               | Account status and activity inside the editor                                        |
+| `RuntimeAds: Set Up Claude & Codex`        | Connect Claude & Codex for ads + wait-time detection (runs automatically on install) |
+| `RuntimeAds: Trust Codex Hooks`            | Open Codex and trust RuntimeAds hooks                                                |
+| `RuntimeAds: Dismiss Sponsor Ad`           | Hide the current sponsor until agents finish waiting                                 |
+| `RuntimeAds: Restore Sponsor Ads`          | Show sponsors again                                                                  |
+| `RuntimeAds: Open Active Ad`               | Open the current sponsor in your browser                                             |
+| `RuntimeAds: Help & Status`                | Connection details and troubleshooting                                               |
+| `RuntimeAds: Menu`                         | Quick actions from the status bar                                                    |
+| `RuntimeAds: Reset Claude & Codex Panels`  | Undo the panel/CLI patches, stay installed and signed in                             |
+| `RuntimeAds: Remove RuntimeAds & Sign Out` | Undo all patches + hooks, sign out, and clear local data                             |
 
 ## Settings
 
@@ -68,7 +69,7 @@ entries and restores your original files; it never deletes config you wrote.
 
 **No lock-in.** Remove RuntimeAds and everything it touched is put back exactly as it was: your
 Claude/Codex panels restored from backup, the global CLI changes undone, the wait-time hooks
-stripped from every workspace, and its one folder (`~/.runtimeads`) deleted. No ad code, no
+removed from your global Claude & Codex config, and its one folder (`~/.runtimeads`) deleted. No ad code, no
 tracking, and no changes to your other extensions survive removal, and your login never lived
 anywhere but your editor's secure storage. Because the client is source-available, you can confirm
 this yourself instead of taking our word for it.
@@ -76,13 +77,14 @@ this yourself instead of taking our word for it.
 Pick the level that matches what you want — from "hide it for now" to "remove it completely."
 
 1. **Just hide the ad** — `RuntimeAds: Dismiss Sponsor Ad` (bring it back with `Restore Sponsor Ads`).
-2. **Restore the original panels, keep earning later** — `RuntimeAds: Restore Claude & Codex Panels`.
-   Undoes the panel/CLI patches but leaves the extension installed; it re-applies next time an ad shows.
-3. **Remove RuntimeAds from one workspace** — `RuntimeAds: Remove from This Workspace`. Restores
-   Claude/Codex, removes this repo's wait-time hooks, signs you out, and clears local data.
+2. **Reset the panels, keep earning later** — `RuntimeAds: Reset Claude & Codex Panels`.
+   Undoes the panel/CLI patches but leaves the extension installed and signed in; it re-applies next time an ad shows.
+3. **Remove RuntimeAds & sign out** — `RuntimeAds: Remove RuntimeAds & Sign Out`. Restores
+   Claude/Codex, removes the global wait-time hooks, signs you out, and clears local data. (Setup won't auto-run
+   again until you re-run `Set Up Claude & Codex`.)
 4. **Uninstall completely** — uninstall **RuntimeAds** from the Extensions panel, then **restart the
-   editor**. On restart, RuntimeAds automatically restores the Claude/Codex panels, undoes the global
-   CLI changes, strips its wait-time hooks from **every workspace it set up**, and removes
+   editor**. On restart, RuntimeAds automatically restores the Claude/Codex panels (every install), undoes the
+   global CLI changes, strips its wait-time hooks from your global config, and removes
    `~/.runtimeads`.
 
 > ⚠️ **Restart the editor after uninstalling.** VS Code and Cursor defer an extension's removal
@@ -90,7 +92,7 @@ Pick the level that matches what you want — from "hide it for now" to "remove 
 > Until you restart, you may still see the sponsor ad. After a restart, it's gone.
 
 Tip: if you want a guaranteed-clean slate (e.g. before reinstalling), run
-`RuntimeAds: Remove from This Workspace` first, then uninstall and restart.
+`RuntimeAds: Remove RuntimeAds & Sign Out` first, then uninstall and restart.
 
 ## Privacy
 
@@ -120,7 +122,7 @@ the Claude Code / Codex extensions, then reload the window.
 
 **Still seeing ads after uninstalling?** The editor hasn't finished removing the extension yet —
 **fully quit and reopen** VS Code / Cursor (closing windows isn't enough). The cleanup runs on the
-next launch. If anything lingers after that, run `RuntimeAds: Remove from This Workspace` before the
+next launch. If anything lingers after that, run `RuntimeAds: Remove RuntimeAds & Sign Out` before the
 final uninstall.
 
 For support, include your **Device ID** (shown in the dashboard) when contacting RuntimeAds.
