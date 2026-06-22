@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ExtensionContext } from "vscode";
@@ -27,8 +27,9 @@ import {
 } from "./deploy-hook-relay";
 import { RELAY_HOOK_SCRIPT } from "./hook-constants";
 import { globalHookIntegrityMismatch } from "./hook-integrity";
-import { mergeHookSettings } from "./hook-settings-merge";
+import { collapseDuplicateHookGroups, mergeHookSettings } from "./hook-settings-merge";
 import { resolveNodeCommand } from "./resolve-node-command";
+import { atomicWriteFileSync } from "./atomic-write";
 
 // Single-source the hook removal in a vscode-free module so the `vscode:uninstall`
 // hook can reuse it; re-exported here for existing callers (e.g. register-commands).
@@ -41,6 +42,10 @@ export async function refreshTerminalHooksIfNeeded(
   context: ExtensionContext,
   endpoint: ClaudeHookServerHandle,
 ): Promise<boolean> {
+  // Heal any duplicate hook groups a prior (buggy) build left behind before doing anything else.
+  collapseDuplicateRuntimeAdsHookGroups(claudeSettingsPath());
+  collapseDuplicateRuntimeAdsHookGroups(codexHooksPath());
+
   const [claudeExisting, codexExisting] = await Promise.all([
     readJsonFile(claudeSettingsPath()),
     readJsonFile(codexHooksPath()),
@@ -58,7 +63,7 @@ export async function refreshTerminalHooksIfNeeded(
     return false;
   }
 
-  await writeGlobalHooks(context, endpoint, claudeExisting, codexExisting);
+  await writeGlobalHooks(context, endpoint);
   return true;
 }
 
@@ -79,9 +84,7 @@ export async function installTerminalHooks(
   codexWebviewService?: CodexWebviewService,
   claudeCliSyncService?: ClaudeCliSyncService,
 ): Promise<{ claudeSettingsPath: string; codexHooksPath: string }> {
-  const claudeExisting = await readJsonFile(claudeSettingsPath());
-  const codexExisting = await readJsonFile(codexHooksPath());
-  const paths = await writeGlobalHooks(context, endpoint, claudeExisting, codexExisting);
+  const paths = await writeGlobalHooks(context, endpoint);
 
   await syncSpinnerMessageFromRuntime(runtime);
   if (claudeCliSyncService) {
@@ -135,8 +138,6 @@ export async function installTerminalHooks(
 async function writeGlobalHooks(
   context: ExtensionContext,
   endpoint: ClaudeHookServerHandle,
-  claudeExisting: Record<string, unknown>,
-  codexExisting: Record<string, unknown>,
 ): Promise<{ claudeSettingsPath: string; codexHooksPath: string }> {
   const nodeCommand = resolveNodeCommand();
   const [claudeRelay, codexRelay] = await Promise.all([
@@ -166,22 +167,39 @@ async function writeGlobalHooks(
 
   const claudePath = claudeSettingsPath();
   const codexPath = codexHooksPath();
-  await Promise.all([
-    mkdir(path.dirname(claudePath), { recursive: true }),
-    mkdir(path.dirname(codexPath), { recursive: true }),
-  ]);
-  await writeFile(
-    claudePath,
-    `${JSON.stringify(mergeHookSettings(claudeExisting, claudeHooks), null, 2)}\n`,
-    "utf8",
-  );
-  await writeFile(
-    codexPath,
-    `${JSON.stringify(mergeHookSettings(codexExisting, codexHooks), null, 2)}\n`,
-    "utf8",
-  );
+  mkdirSync(path.dirname(claudePath), { recursive: true });
+  mkdirSync(path.dirname(codexPath), { recursive: true });
+
+  // Merge + write synchronously: this read-modify-write shares the event loop with the
+  // spinner-verb writer (claude-cli-sync), and a sync section can't be interleaved by it, so
+  // neither clobbers the other's keys. We re-read each file here — rather than trust a copy the
+  // caller read earlier — so we always merge onto the current on-disk state.
+  mergeRuntimeAdsHooksIntoFile(claudePath, claudeHooks);
+  mergeRuntimeAdsHooksIntoFile(codexPath, codexHooks);
 
   return { claudeSettingsPath: claudePath, codexHooksPath: codexPath };
+}
+
+/** Read → merge our hook groups → atomically write one global config file. No-op when unchanged. */
+function mergeRuntimeAdsHooksIntoFile(
+  filePath: string,
+  runtimeadsHooks: Record<string, unknown>,
+): void {
+  const existing = readJsonFileSync(filePath);
+  const next = `${JSON.stringify(mergeHookSettings(existing, runtimeadsHooks), null, 2)}\n`;
+  const current = existsSync(filePath) ? readFileSync(filePath, "utf8") : null;
+  if (next !== current) {
+    atomicWriteFileSync(filePath, next);
+  }
+}
+
+function readJsonFileSync(filePath: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 function hasRuntimeAdsRelayHooks(settings: Record<string, unknown>): boolean {
@@ -190,18 +208,31 @@ function hasRuntimeAdsRelayHooks(settings: Record<string, unknown>): boolean {
       ? (settings.hooks as Record<string, unknown>)
       : {};
 
-  return Object.values(hooks).some((groups) => {
-    if (!Array.isArray(groups)) {
-      return false;
-    }
-    return groups.some((group) => {
-      if (!group || typeof group !== "object") {
-        return false;
-      }
-      const groupHooks = (group as { hooks?: Array<Record<string, unknown>> }).hooks ?? [];
-      return groupHooks.some((hook) => isRuntimeAdsRelayHook(hook));
-    });
-  });
+  return Object.values(hooks).some(
+    (groups) => Array.isArray(groups) && groups.some((group) => isRuntimeAdsHookGroup(group)),
+  );
+}
+
+/** A hook group is "ours" when any of its hooks runs a RuntimeAds wrapper / relay script. */
+function isRuntimeAdsHookGroup(group: unknown): boolean {
+  if (!group || typeof group !== "object") {
+    return false;
+  }
+  const groupHooks = (group as { hooks?: Array<Record<string, unknown>> }).hooks ?? [];
+  return groupHooks.some((hook) => isRuntimeAdsRelayHook(hook));
+}
+
+/**
+ * One-time hygiene: older builds matched our hooks by `.mjs` name only, so they never recognized
+ * the `.sh` wrapper they actually installed and appended a fresh group on every merge — leaving
+ * duplicate RuntimeAds groups (the hook then fired twice per event). Collapse them to the single
+ * (first) group per event. Pure settings cleanup — doesn't touch relay scripts. No-op when clean.
+ */
+export function collapseDuplicateRuntimeAdsHookGroups(filePath: string): void {
+  const settings = readJsonFileSync(filePath);
+  if (collapseDuplicateHookGroups(settings)) {
+    atomicWriteFileSync(filePath, `${JSON.stringify(settings, null, 2)}\n`);
+  }
 }
 
 function isRuntimeAdsRelayHook(hook: Record<string, unknown>): boolean {

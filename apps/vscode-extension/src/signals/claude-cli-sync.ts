@@ -9,6 +9,8 @@ import {
   sanitizeSpinnerVerb,
 } from "@runtimeads/runtime";
 
+import { atomicWriteFileSync } from "./atomic-write";
+
 const ABSENT_MARKER = "/* RUNTIMEADS-CLI-ABSENT */";
 // Detects leaked ANSI color escape sequences that workspace settings have
 // historically injected into spinner verbs. The \u001b control char is intentional.
@@ -76,7 +78,7 @@ export class ClaudeCliSyncService {
 
       delete settings.spinnerVerbs;
       delete settings.runtimeadsSpinnerVerbs;
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+      atomicWriteFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
       this.stripWorkspaceCliSurfaces();
       return { ok: true };
     } catch (error) {
@@ -141,7 +143,7 @@ export class ClaudeCliSyncService {
         // Always strip our keys defensively, so a backup captured while already patched
         // (legacy bug) can never re-pollute the restored file.
         const cleaned = this.stripRuntimeadsCliKeys(this.readJson(source));
-        writeFileSync(settingsPath, `${JSON.stringify(cleaned, null, 2)}\n`, "utf8");
+        atomicWriteFileSync(settingsPath, `${JSON.stringify(cleaned, null, 2)}\n`);
       }
 
       const scriptPath = this.scriptPath();
@@ -188,7 +190,7 @@ export class ClaudeCliSyncService {
 
   private writeCache(cache: CliAdCache): void {
     mkdirSync(this.runtimeadsDir(), { recursive: true });
-    writeFileSync(this.cachePath(), JSON.stringify(cache), "utf8");
+    atomicWriteFileSync(this.cachePath(), JSON.stringify(cache));
   }
 
   private ensureStatuslineScript(): void {
@@ -202,7 +204,7 @@ export class ClaudeCliSyncService {
 
     mkdirSync(this.runtimeadsDir(), { recursive: true });
     if (!existsSync(scriptPath) || readFileSync(scriptPath, "utf8") !== rendered) {
-      writeFileSync(scriptPath, rendered, "utf8");
+      atomicWriteFileSync(scriptPath, rendered);
     }
   }
 
@@ -248,7 +250,7 @@ export class ClaudeCliSyncService {
     const next = `${JSON.stringify(settings, null, 2)}\n`;
     if (!existed || next !== pristine) {
       mkdirSync(join(homedir(), ".claude"), { recursive: true });
-      writeFileSync(settingsPath, next, "utf8");
+      atomicWriteFileSync(settingsPath, next);
     }
   }
 
@@ -300,7 +302,7 @@ export class ClaudeCliSyncService {
 
       const next = `${JSON.stringify(settings, null, 2)}\n`;
       if (next !== pristine) {
-        writeFileSync(this.workspaceSettingsPath, next, "utf8");
+        atomicWriteFileSync(this.workspaceSettingsPath, next);
       }
     } catch {
       // Never break sync if workspace settings are malformed.

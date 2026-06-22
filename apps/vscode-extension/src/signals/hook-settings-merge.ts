@@ -1,3 +1,5 @@
+import { isRuntimeAdsHookWrapper } from "./deploy-hook-relay";
+
 const RUNTIMEADS_HOOK_SCRIPTS = [
   "runtimeads-terminal-hook.mjs",
   "runtimeads-claude-hook.mjs",
@@ -39,6 +41,45 @@ export function mergeHookSettings(
   return merged;
 }
 
+/**
+ * Collapse duplicate RuntimeAds hook groups — left behind when an older build's `.mjs`-only dedup
+ * failed to recognize the `.sh` wrapper it installed and kept appending — down to the first group
+ * per event. Mutates `settings.hooks` in place and reports whether anything changed. The user's own
+ * (non-RuntimeAds) groups are never touched.
+ */
+export function collapseDuplicateHookGroups(settings: Record<string, unknown>): boolean {
+  const hooks = settings.hooks;
+  if (!hooks || typeof hooks !== "object") {
+    return false;
+  }
+
+  let changed = false;
+  for (const [eventName, groups] of Object.entries(hooks as Record<string, unknown>)) {
+    if (!Array.isArray(groups)) {
+      continue;
+    }
+
+    let keptOurs = false;
+    const deduped = groups.filter((group) => {
+      if (!isRuntimeAdsHookGroup(group)) {
+        return true;
+      }
+      if (keptOurs) {
+        changed = true;
+        return false;
+      }
+      keptOurs = true;
+      return true;
+    });
+
+    if (deduped.length !== groups.length) {
+      (hooks as Record<string, unknown>)[eventName] = deduped;
+    }
+  }
+
+  return changed;
+}
+
 function isRuntimeAdsHookGroup(group: unknown): boolean {
   if (!group || typeof group !== "object") {
     return false;
@@ -51,6 +92,14 @@ function isRuntimeAdsHookGroup(group: unknown): boolean {
 function isRuntimeAdsHook(hook: Record<string, unknown>): boolean {
   const command = typeof hook.command === "string" ? hook.command : "";
   const args = Array.isArray(hook.args) ? hook.args : [];
+
+  // Wrapper-command form — the shape we actually install today:
+  // { type: "command", command: "~/.runtimeads/hooks/runtimeads-claude-hook.sh" }.
+  // Without this the old `.mjs`-only check never matched our own installed hooks, so each
+  // merge appended a fresh group instead of replacing → duplicate hook groups accumulated.
+  if (isRuntimeAdsHookWrapper(command)) {
+    return true;
+  }
 
   if (RUNTIMEADS_HOOK_SCRIPTS.some((script) => command.includes(script))) {
     return true;
