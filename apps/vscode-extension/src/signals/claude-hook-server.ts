@@ -126,25 +126,39 @@ export function buildTerminalHookInstallerConfig(options: {
 }): Record<string, unknown> {
   const relayScriptPath = path.join(options.extensionPath, "dist", RELAY_HOOK_SCRIPT);
 
-  const hooks: Record<string, Array<{ hooks: Array<Record<string, unknown>> }>> = {};
+  const hooks: Record<
+    string,
+    Array<{ matcher?: string; hooks: Array<Record<string, unknown>> }>
+  > = {};
 
   for (const eventName of options.events) {
+    const hook = options.hookCommand
+      ? {
+          type: "command",
+          command: options.hookCommand,
+          ...(eventName === "Notification" ? { async: true } : {}),
+        }
+      : {
+          type: "command",
+          command: options.nodeCommand,
+          args: [relayScriptPath, options.agent],
+          ...(eventName === "Notification" ? { async: true } : {}),
+        };
+
+    // Claude tool events get an explicit match-all matcher. Claude treats `matcher` as optional,
+    // but Cursor mirrors Claude's hooks into its own engine and calls `matcher.split("|")` for
+    // PreToolUse/PostToolUse without a null-guard — a missing matcher throws "Cannot read
+    // properties of undefined (reading 'split')" and shows an "Invalid hooks.json" panel even
+    // though Claude itself runs the hooks fine. `"*"` short-circuits Cursor's parser safely.
+    // Scoped to claude_code: Cursor doesn't mirror Codex hooks, so leave ~/.codex/hooks.json as-is.
+    const isToolEvent =
+      options.agent === "claude_code" &&
+      (eventName === "PreToolUse" || eventName === "PostToolUse");
+
     hooks[eventName] = [
       {
-        hooks: [
-          options.hookCommand
-            ? {
-                type: "command",
-                command: options.hookCommand,
-                ...(eventName === "Notification" ? { async: true } : {}),
-              }
-            : {
-                type: "command",
-                command: options.nodeCommand,
-                args: [relayScriptPath, options.agent],
-                ...(eventName === "Notification" ? { async: true } : {}),
-              },
-        ],
+        ...(isToolEvent ? { matcher: "*" } : {}),
+        hooks: [hook],
       },
     ];
   }
