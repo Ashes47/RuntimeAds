@@ -346,12 +346,15 @@ async function reportPatchPreflight(
 
 export async function deactivate() {
   statusBar?.stop();
+  statusBar = undefined;
   await claudeHookServer?.dispose();
   claudeHookServer = undefined;
   claudeWebviewService = undefined;
   codexWebviewService = undefined;
   claudeCliSyncService = undefined;
+  codexCliSyncService = undefined;
   await runtime?.stop();
+  runtime = undefined;
   await disposeLocalStore?.();
   disposeLocalStore = undefined;
 }

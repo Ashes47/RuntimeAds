@@ -46,6 +46,9 @@ function readCliAdCache(): CliAdCache | undefined {
     return {
       adText: parsed.adText,
       clickUrl: parsed.clickUrl,
+      ...(typeof parsed.destinationUrl === "string"
+        ? { destinationUrl: parsed.destinationUrl }
+        : {}),
       allocationId: parsed.allocationId,
       ts: parsed.ts,
     };

@@ -16,17 +16,12 @@ describe("FrequencyGuard", () => {
     expect(await guard.canRender()).toBe(true);
   });
 
-  it("enforces the minimum interval between renders", async () => {
-    let now = Date.parse("2026-01-01T10:00:00.000Z");
-    const guard = new FrequencyGuard({
-      store: new MemoryKeyValueStore(),
-      now: () => now,
-    });
+  it("has no time cooldown between renders — an ad can render again immediately", async () => {
+    const guard = new FrequencyGuard({ store: new MemoryKeyValueStore() });
 
     await guard.recordRender("2026-01-01T10:00:00.000Z");
-    expect(await guard.canRender()).toBe(false);
-
-    now += 5000;
+    // No MIN_RENDER_INTERVAL: a just-completed render does not block the next one. The 5s
+    // impression-validity threshold lives in the display lifecycle, not here.
     expect(await guard.canRender()).toBe(true);
   });
 });

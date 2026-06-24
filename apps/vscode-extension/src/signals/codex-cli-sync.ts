@@ -20,6 +20,9 @@ import type { CachedAllocation } from "@runtimeads/sdk-contracts";
 import { formatCliAdText, stripControlChars } from "@runtimeads/runtime";
 
 const MARKER = "RUNTIMEADS-CODEX-CLI";
+// Bump when the wrapper asset *body* changes (logic/fallback), so already-patched codex
+// binaries get re-patched on the next sync. `MARKER` alone can't detect a body-only edit.
+const WRAPPER_VERSION_TAG = "RUNTIMEADS-CODEX-CLI v2";
 const AD_FILE_NAME = "codex-cli-ad.txt";
 const SHIM_METADATA_NAME = "codex-shim.json";
 
@@ -66,11 +69,15 @@ export class CodexCliSyncService {
       }
 
       mkdirSync(this.runtimeadsDir(), { recursive: true });
-      writeFileSync(
-        this.adFilePath(),
-        `${stripControlChars(formatCliAdText(allocation)) || "RuntimeAds sponsor"}\n`,
-        "utf8",
-      );
+      const adText = stripControlChars(formatCliAdText(allocation)).trim();
+      const adPath = this.adFilePath();
+      if (adText) {
+        writeFileSync(adPath, `${adText}\n`, "utf8");
+      } else if (existsSync(adPath)) {
+        // No real ad text -> drop the cache so the wrapper renders nothing (null fallback,
+        // not a "RuntimeAds sponsor" placeholder).
+        rmSync(adPath);
+      }
 
       if (!this.isPatched(shim) || this.wrapperNeedsRefresh(shim)) {
         this.installWrapper(shim);
@@ -283,6 +290,11 @@ export class CodexCliSyncService {
       const raw = readFileSync(shim, "utf8");
       if (!raw.includes(MARKER)) {
         return false;
+      }
+
+      // Wrapper body changed since this shim was patched -> refresh to the current version.
+      if (!raw.includes(WRAPPER_VERSION_TAG)) {
+        return true;
       }
 
       const metadata = this.readShimMetadata();

@@ -4,7 +4,7 @@
   "description": "Get paid while Claude Code and Codex think. Privacy-safe sponsor ads during AI wait time.",
   "publisher": "runtimeads",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "SEE LICENSE IN LICENSE.txt",
   "icon": "media/favicon.png",
   "main": "./dist/extension.cjs",

@@ -28,8 +28,10 @@ function isPrivateOrLinkLocalHost(hostname: string): boolean {
     if (a === 192 && b === 168) return true; // private
     return false;
   }
-  // IPv6 link-local (fe80::) and unique-local (fc00::/fd00::).
-  return host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd");
+  // IPv6 link-local (fe80::) and unique-local (fc00::/fd00::). Gate the fc/fd check to
+  // literal IPv6 (host contains ":") so it doesn't block DNS names like fcdn.example.com.
+  if (host.startsWith("fe80:")) return true;
+  return host.includes(":") && (host.startsWith("fc") || host.startsWith("fd"));
 }
 
 function fetchableIconUrl(iconUrl: string): string | undefined {

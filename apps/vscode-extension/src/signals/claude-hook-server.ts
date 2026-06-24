@@ -8,7 +8,10 @@ import type { Agent, CachedAllocation, RenderSurface } from "@runtimeads/sdk-con
 import type { AttentionRuntime } from "@runtimeads/runtime";
 import { extractTerminalHookMetadata, mapTerminalHookToObservation } from "@runtimeads/runtime";
 
-import { syncDisplaySurfacesFromRuntime } from "./claude-hook-display";
+import {
+  clearTerminalSurfacesFromRuntime,
+  syncDisplaySurfacesFromRuntime,
+} from "./claude-hook-display";
 import { openUrlInSystemBrowser } from "./open-system-browser";
 import { resolveCampaignIconDataUrl } from "./campaign-icon-cache";
 import { ensurePatchAllocation } from "../rendering/resolve-display-allocation";
@@ -256,7 +259,12 @@ async function handleRequest(
 
     if (observation) {
       await reportTerminalActivity(runtime, observation);
-      await updateTerminalDisplayState(runtime, observation.activity);
+      await updateTerminalDisplayState(
+        runtime,
+        observation.activity,
+        metadata.hook_event_name,
+        observation.sessionId,
+      );
     }
 
     response.writeHead(202);
@@ -390,8 +398,9 @@ async function handleWebviewPing(
     return;
   }
 
+  // Only impression pings are POSTed here; overlays record clicks via GET /open.
   const kind = request.url.slice(prefix.length).replace(/\/$/, "");
-  if (kind !== "impression" && kind !== "click") {
+  if (kind !== "impression") {
     response.writeHead(404);
     response.end();
     return;
@@ -413,12 +422,8 @@ async function handleWebviewPing(
     }
 
     const lifecycle = runtime.getDisplayLifecycleService();
-    if (kind === "impression") {
-      if (parsed.visible_ms !== undefined) {
-        await lifecycle.reportSurfaceVisibility(surface, allocationId, parsed.visible_ms);
-      }
-    } else {
-      void openAdDestination(runtime, allocationId);
+    if (parsed.visible_ms !== undefined) {
+      await lifecycle.reportSurfaceVisibility(surface, allocationId, parsed.visible_ms);
     }
 
     response.writeHead(202, webviewCorsHeaders());
@@ -463,15 +468,6 @@ async function resolveAllocationDestination(
   return entry?.value.destinationUrl;
 }
 
-async function openAdDestination(runtime: AttentionRuntime, allocationId: string): Promise<void> {
-  const destination = await resolveAllocationDestination(runtime, allocationId);
-  if (!destination) {
-    return;
-  }
-
-  await openUrlInSystemBrowser(destination);
-}
-
 function webviewCorsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
@@ -483,17 +479,35 @@ function webviewCorsHeaders(): Record<string, string> {
 async function updateTerminalDisplayState(
   runtime: AttentionRuntime,
   activity: string | undefined,
+  hookEventName?: string,
+  sessionId?: string,
 ): Promise<void> {
-  if (!activity) {
-    return;
-  }
+  const lifecycle = runtime.getDisplayLifecycleService();
 
-  if (activity === "waiting_started") {
+  // Turn boundaries (Claude Code): an ad spans one prompt → the agent finishing. It appears when a
+  // prompt is submitted, stays up for the whole turn (across every tool wait), and is taken down
+  // when the agent stops (the user can prompt again) — counting as a single impression.
+  if (hookEventName === "UserPromptSubmit" && sessionId) {
+    await lifecycle.beginTurn(sessionId);
     await syncDisplaySurfacesFromRuntime(runtime);
     return;
   }
 
-  if (activity === "waiting_ended" || activity === "session_completed") {
+  if (hookEventName === "Stop" || hookEventName === "SessionEnd") {
+    await lifecycle.endTurn(sessionId);
+    await clearTerminalSurfacesFromRuntime();
+    return;
+  }
+
+  // Mid-turn tool waits (PreToolUse/PostToolUse/Notification): keep the same ad up.
+  if (!activity) {
+    return;
+  }
+  if (
+    activity === "waiting_started" ||
+    activity === "waiting_ended" ||
+    activity === "session_completed"
+  ) {
     await syncDisplaySurfacesFromRuntime(runtime);
   }
 }

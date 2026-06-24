@@ -1,8 +1,6 @@
 import type { KeyValueStore } from "../storage/key-value-store";
 
 const STATE_KEY = "runtimeads.render.frequency";
-/** Aligns with IMPRESSION_VIEW_THRESHOLD_MS — one impression gate per qualifying wait. */
-export const MIN_RENDER_INTERVAL_MS = 5000;
 
 export interface FrequencyGuardState {
   lastRenderAt: string | null;
@@ -12,7 +10,6 @@ export interface FrequencyGuardState {
 
 export interface FrequencyGuardOptions {
   store: KeyValueStore;
-  minCooldownMs?: number;
   now?: () => number;
 }
 
@@ -21,7 +18,6 @@ type StoredFrequencyGuardState = Partial<FrequencyGuardState> & {
 };
 
 export class FrequencyGuard {
-  private readonly minCooldownMs: number;
   private readonly now: () => number;
   private cachedState: FrequencyGuardState = {
     lastRenderAt: null,
@@ -30,24 +26,16 @@ export class FrequencyGuard {
   };
 
   constructor(private readonly options: FrequencyGuardOptions) {
-    this.minCooldownMs = options.minCooldownMs ?? MIN_RENDER_INTERVAL_MS;
     this.now = options.now ?? (() => Date.now());
   }
 
   async canRender(): Promise<boolean> {
+    // No time cooldown between ads — an ad fills the slot on every qualifying wait, so the display
+    // never goes blank between back-to-back waits. The only block is a manual user dismiss for the
+    // session. The 5s threshold lives in the display lifecycle (IMPRESSION_VIEW_THRESHOLD_MS) and
+    // decides only whether a *view* counts as a valid impression, not whether to render.
     const state = await this.load();
-    if (state.hiddenForSession) {
-      return false;
-    }
-
-    if (state.lastRenderAt) {
-      const lastRenderAt = Date.parse(state.lastRenderAt);
-      if (lastRenderAt > 0 && this.now() - lastRenderAt < this.minCooldownMs) {
-        return false;
-      }
-    }
-
-    return true;
+    return !state.hiddenForSession;
   }
 
   async recordRender(at = new Date(this.now()).toISOString()): Promise<void> {

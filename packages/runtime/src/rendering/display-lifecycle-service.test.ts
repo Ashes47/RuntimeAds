@@ -430,6 +430,59 @@ describe("DisplayLifecycleService", () => {
     vi.useRealTimers();
   });
 
+  it("keeps one ad across a whole turn and records a single impression", async () => {
+    const store = new MemoryKeyValueStore();
+    const cache = new CacheStore(store);
+    const eventQueue = new EventQueue(store);
+    const installManager = new InstallManager({
+      platform: "vscode",
+      sdkVersion: "0.1.0",
+      store,
+      idFactory: () => "install-1",
+    });
+    await installManager.start();
+    let eventCounter = 0;
+    const displayEvents = new DisplayEventService({
+      eventQueue,
+      installManager,
+      platform: "vscode",
+      sdkVersion: "0.1.0",
+      idFactory: () => `event-${++eventCounter}`,
+    });
+    const lifecycle = new DisplayLifecycleService({
+      cacheStore: cache,
+      displayEvents,
+      frequencyGuard: new FrequencyGuard({ store }),
+    });
+
+    await cache.put({ id: "alloc-1", value: allocation("alloc-1") });
+    await cache.put({ id: "alloc-2", value: allocation("alloc-2") });
+
+    // Prompt submitted → ad shows for the turn.
+    expect((await lifecycle.beginTurn("turn-1"))?.allocationId).toBe("alloc-1");
+
+    // Ad viewed past the validity threshold → one impression.
+    await lifecycle.recordImpression("cli_status_line", "alloc-1", "turn-1", {
+      visibleMs: IMPRESSION_VIEW_THRESHOLD_MS,
+    });
+
+    // A tool finishes mid-turn: must NOT tear down or rotate — same ad stays up.
+    await lifecycle.completeWaitingSession("turn-1");
+    expect(lifecycle.getCurrentAllocation()?.allocationId).toBe("alloc-1");
+
+    // Next tool wait: still the same ad, never alloc-2.
+    expect((await lifecycle.beginWaitingSession("turn-1"))?.allocationId).toBe("alloc-1");
+
+    // Turn ends (Stop) → display torn down.
+    await lifecycle.endTurn("turn-1");
+    expect(lifecycle.getCurrentAllocation()).toBeUndefined();
+
+    const impressions = (await eventQueue.listUploadable()).filter(
+      (record) => record.event.eventType === "render.impression",
+    );
+    expect(impressions).toHaveLength(1);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });

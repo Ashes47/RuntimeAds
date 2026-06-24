@@ -313,20 +313,58 @@
       return overlay;
     }
 
+    // Nearest scrollable ancestor = the transcript viewport. Codex's composer/input sits BELOW it
+    // and is not above z-index:1 (unlike Claude's), so the fixed overlay must be clipped to this
+    // container — otherwise a scrolled-away thinking row paints the ad over the prompt area.
+    function scrollAncestor(el) {
+      var node = el;
+      var hops = 0;
+      while (node && node.nodeType === 1 && hops++ < 20) {
+        try {
+          var cs = window.getComputedStyle(node) || {};
+          var overflow = cs.overflowY || cs.overflow;
+          if (overflow === "auto" || overflow === "scroll") {
+            return node;
+          }
+        } catch (e) {}
+        node = node.parentElement;
+      }
+      return null;
+    }
+
     function placeOverlay(row) {
       try {
         var rect = row.getBoundingClientRect();
-        if (rect && (rect.width || rect.height || rect.top || rect.left)) {
-          var key = rect.left + "," + rect.top + "," + rect.width + "," + rect.height;
-          if (key !== _rect) {
-            _rect = key;
-            overlay.style.left = rect.left + "px";
-            overlay.style.top = rect.top + "px";
-            overlay.style.minWidth = rect.width + "px";
-            overlay.style.height = rect.height + "px";
-            overlay.style.visibility = "visible";
-            overlay.style.background = surfaceBg(row);
+        if (!rect || !(rect.width || rect.height || rect.top || rect.left)) {
+          return;
+        }
+        // Clip vertically to the transcript scroll container so the ad never spills past it into
+        // the composer below (or above the transcript top) when the anchored row is scrolled.
+        var top = rect.top;
+        var bottom = rect.top + rect.height;
+        var sc = scrollAncestor(row);
+        if (sc) {
+          var cr = sc.getBoundingClientRect();
+          top = Math.max(top, cr.top);
+          bottom = Math.min(bottom, cr.bottom);
+        }
+        var height = bottom - top;
+        if (height <= 1) {
+          if (overlay.style.visibility !== "hidden") {
+            overlay.style.visibility = "hidden";
           }
+          _rect = "";
+          return;
+        }
+        var key = rect.left + "," + top + "," + rect.width + "," + height;
+        if (key !== _rect) {
+          _rect = key;
+          overlay.style.left = rect.left + "px";
+          overlay.style.top = top + "px";
+          overlay.style.minWidth = rect.width + "px";
+          overlay.style.height = height + "px";
+          overlay.style.visibility = "visible";
+          overlay.style.background = surfaceBg(row);
         }
       } catch (e) {}
     }
@@ -451,7 +489,7 @@
         // Only render when we actually have an ad. The block is injected with empty "bootstrap"
         // content and only gets real text once /ad populates it; without this guard it paints an
         // empty bar (no allocation, or /serve unreachable). No ad → render nothing.
-        var hasAd = !!(BRAND || HEADLINE || AD_TEXT);
+        var hasAd = !!(BRAND || HEADLINE);
         if (!_noServe && hasAd && row && isThinkingRow(row)) {
           paint(row);
         } else if (overlay && (now - lastSeenMs > GRACE_MS || !hasAd)) {

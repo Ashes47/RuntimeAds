@@ -58,6 +58,11 @@ export class DisplayLifecycleService {
   private readonly now: () => number;
   private activeSession: DisplayLifecycleSession | undefined;
   private timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  // A "turn" spans one user prompt → the agent finishing (UserPromptSubmit … Stop). While a turn is
+  // active the SAME ad stays up across every tool wait and counts as ONE impression; the per-wait
+  // begin/complete calls become keep-alive no-ops. Agents that don't emit turn boundaries leave
+  // this false and keep the per-wait behavior.
+  private turnActive = false;
 
   constructor(private readonly options: DisplayLifecycleServiceOptions) {
     this.selector = new InventorySelector(options.cacheStore);
@@ -89,7 +94,9 @@ export class DisplayLifecycleService {
 
   async resolveAllocationForDisplay(sessionId?: string): Promise<CachedAllocation | undefined> {
     if (!(await this.options.frequencyGuard.canRender())) {
-      this.options.displayMetrics?.recordImpressionSkip("frequency_cap");
+      // canRender now blocks only on a manual user dismiss (no time cooldown), so this skip is a
+      // user_dismissed, not a frequency cap.
+      this.options.displayMetrics?.recordImpressionSkip("user_dismissed");
       return undefined;
     }
 
@@ -122,11 +129,42 @@ export class DisplayLifecycleService {
   }
 
   async beginWaitingSession(sessionId: string): Promise<CachedAllocation | undefined> {
+    // Inside a turn the same ad stays up across every tool wait — never abandon or rotate.
+    if (this.turnActive) {
+      return this.activeSession?.allocation ?? this.resolveAllocationForDisplay(sessionId);
+    }
+
     if (this.activeSession && this.activeSession.sessionId !== sessionId) {
       await this.abandonActiveSession("waiting_ended");
     }
 
     return this.resolveAllocationForDisplay(sessionId);
+  }
+
+  /**
+   * Turn boundary: a new user prompt was submitted. Opens (or keeps) the display for the whole turn.
+   * The ad shows now and stays up until {@link endTurn}, counting as a single impression.
+   */
+  async beginTurn(sessionId: string): Promise<CachedAllocation | undefined> {
+    if (this.turnActive) {
+      // Stale turn (a previous Stop was missed) — close it before starting the new one.
+      await this.endTurn(sessionId);
+    }
+    this.turnActive = true;
+    return this.resolveAllocationForDisplay(sessionId);
+  }
+
+  /**
+   * Turn boundary: the agent finished and the user can prompt again (Stop / SessionEnd). Records the
+   * single impression for the turn (if the ad was visible ≥ IMPRESSION_VIEW_THRESHOLD_MS) and tears
+   * the display down. No-op if no turn is active.
+   */
+  async endTurn(sessionId?: string): Promise<void> {
+    if (!this.turnActive) {
+      return;
+    }
+    this.turnActive = false;
+    await this.completeWaitingSession(sessionId);
   }
 
   async recordSurfaceDisplayed(
@@ -228,6 +266,12 @@ export class DisplayLifecycleService {
     sessionId?: string,
     options?: CompleteWaitingSessionOptions,
   ): Promise<void> {
+    // Mid-turn a "waiting_ended" just means a tool finished — keep the same ad up; the impression
+    // and teardown happen once, at endTurn. (endTurn clears turnActive first, then calls through.)
+    if (this.turnActive) {
+      return;
+    }
+
     let session = this.activeSession;
     if (!session && sessionId && (options?.waitingPeriodMs ?? 0) >= IMPRESSION_VIEW_THRESHOLD_MS) {
       await this.beginWaitingSession(sessionId);

@@ -78,9 +78,14 @@ export async function syncSpinnerMessageFromRuntime(runtime: AttentionRuntime): 
   const sessionId = waitingSession?.sessionId;
 
   if (claudeCliSyncService) {
-    claudeCliSyncService.syncAllocation(allocation);
-    await lifecycle.recordSurfaceDisplayed("cli_spinner_verb", allocation.allocationId, sessionId);
-    await lifecycle.recordSurfaceDisplayed("cli_status_line", allocation.allocationId, sessionId);
+    if (claudeCliSyncService.syncAllocation(allocation).ok) {
+      await lifecycle.recordSurfaceDisplayed(
+        "cli_spinner_verb",
+        allocation.allocationId,
+        sessionId,
+      );
+      await lifecycle.recordSurfaceDisplayed("cli_status_line", allocation.allocationId, sessionId);
+    }
   }
 
   if (codexCliSyncService) {
@@ -101,6 +106,17 @@ export async function clearSpinnerMessageFromRuntime(runtime: AttentionRuntime):
   claudeCliSyncService?.clearCliSurfaces();
   codexCliSyncService?.clearBanner();
   await runtime.getDisplayLifecycleService().dismissCurrent("manual");
+  await refreshStatusBar();
+}
+
+/**
+ * Take the ad down at the end of a turn (Stop/SessionEnd) WITHOUT a manual dismiss — clears the CLI
+ * surfaces and refreshes the status bar, but does not suppress future ads (the next prompt shows one
+ * again). The display session itself is already torn down by `endTurn`.
+ */
+export async function clearTerminalSurfacesFromRuntime(): Promise<void> {
+  claudeCliSyncService?.clearCliSurfaces();
+  codexCliSyncService?.clearBanner();
   await refreshStatusBar();
 }
 

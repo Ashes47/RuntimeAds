@@ -1,10 +1,17 @@
 #!/bin/sh
-# ===== RUNTIMEADS-CODEX-CLI =====
+# ===== RUNTIMEADS-CODEX-CLI v2 =====
 # Reversible RuntimeAds wrapper around the npm-installed codex shim.
+# SECURITY: the ad text is advertiser-controlled. It is only ever the %s argument to a
+# fixed printf format and is always double-quoted -- the shell does NOT re-evaluate
+# command substitution ($(...), backticks) inside a variable's value, so this prints
+# the text literally. Do NOT move $AD_TEXT into the format string or a command position.
 AD_FILE="__RUNTIMEADS_CODEX_AD_PATH__"
-AD_TEXT="RuntimeAds sponsor"
+AD_TEXT=""
 if [ -r "$AD_FILE" ]; then
-  AD_TEXT=$(head -n 1 "$AD_FILE" 2>/dev/null || echo "RuntimeAds sponsor")
+  AD_TEXT=$(head -n 1 "$AD_FILE" 2>/dev/null)
 fi
-printf '\n  [ad] %s\n\n' "$AD_TEXT"
+# No real ad -> render nothing (no placeholder banner).
+if [ -n "$AD_TEXT" ]; then
+  printf '\n  [ad] %s\n\n' "$AD_TEXT"
+fi
 exec node "__RUNTIMEADS_CODEX_BACKUP__" "$@"

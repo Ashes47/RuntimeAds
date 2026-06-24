@@ -1,12 +1,18 @@
 @echo off
-REM ===== RUNTIMEADS-CODEX-CLI =====
+REM ===== RUNTIMEADS-CODEX-CLI v2 =====
+REM Reversible RuntimeAds wrapper around the npm-installed codex shim.
+REM SECURITY: the ad text is advertiser-controlled. NEVER render it via `echo %VAR%`
+REM -- cmd expands %VAR% before parsing, so `&`, `|`, `<`, `>`, `^`, `(`, `)` in the
+REM text break out of echo and run as commands. Emit the file verbatim with `type`,
+REM which copies bytes to stdout with no variable expansion or command parsing. The
+REM banner is always a single line (newlines are stripped before the file is written).
 set "AD_FILE=__RUNTIMEADS_CODEX_AD_PATH__"
-set "AD_TEXT=RuntimeAds sponsor"
-if exist "%AD_FILE%" (
-  for /f "usebackq delims=" %%A in ("%AD_FILE%") do set "AD_TEXT=%%A" & goto :done
-)
-:done
+REM No file / empty file -> render nothing (no placeholder banner).
+if not exist "%AD_FILE%" goto :ad_done
+for %%S in ("%AD_FILE%") do if "%%~zS"=="0" goto :ad_done
 echo.
-echo   [ad] %AD_TEXT%
+<nul set /p "=  [ad] "
+type "%AD_FILE%"
 echo.
+:ad_done
 node "__RUNTIMEADS_CODEX_BACKUP__" %*

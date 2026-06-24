@@ -63,11 +63,7 @@ export {
   DisplayMetricsService,
   type DisplayMetricsSnapshot,
 } from "./rendering/display-metrics-service";
-export {
-  FrequencyGuard,
-  MIN_RENDER_INTERVAL_MS,
-  type FrequencyGuardState,
-} from "./rendering/frequency-guard";
+export { FrequencyGuard, type FrequencyGuardState } from "./rendering/frequency-guard";
 export { SignalObservability } from "./signals/signal-observability";
 export {
   extractTerminalHookMetadata,
